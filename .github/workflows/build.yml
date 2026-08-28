@@ -30,6 +30,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # 移除本机专用的 aapt2 路径覆盖，让 CI 使用标准 SDK 的 aapt2
+      - name: Strip machine-specific aapt2 override
+        run: |
+          sed -i '/aapt2FromMavenOverride/d' gradle.properties || true
+          echo "--- gradle.properties (CI) ---"
+          cat gradle.properties
+
       # 仅当提供 RELEASE_KEYSTORE base64 时解码签名密钥（Push/Pull 时可跳过）
       - name: Decode release keystore
         if: ${{ secrets.RELEASE_KEYSTORE != '' }}
