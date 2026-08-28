@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -39,21 +44,21 @@ jobs:
 
       # 仅当提供 RELEASE_KEYSTORE base64 时解码签名密钥（Push/Pull 时可跳过）
       - name: Decode release keystore
-        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+        if: env.RELEASE_KEYSTORE != ''
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 --decode > release.keystore
+          echo "${{ env.RELEASE_KEYSTORE }}" | base64 --decode > release.keystore
           chmod 600 release.keystore
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Signed Release APK
-        if: ${{ secrets.RELEASE_KEYSTORE != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' }}
+        if: env.RELEASE_KEYSTORE != '' && env.KEYSTORE_PASSWORD != '' && env.KEY_ALIAS != '' && env.KEY_PASSWORD != ''
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload Debug APK artifact
@@ -65,7 +70,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Release APK artifact
-        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+        if: env.RELEASE_KEYSTORE != ''
         uses: actions/upload-artifact@v4
         with:
           name: controlconverter-release-apk
