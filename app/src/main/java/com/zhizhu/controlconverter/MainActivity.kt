@@ -555,6 +555,12 @@ private fun InfoTab(onOpenLicenses: () -> Unit) {
         runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
 
+    val versionName = remember {
+        runCatching {
+            activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
+        }.getOrNull().orEmpty().ifBlank { "0.3" }
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -574,7 +580,7 @@ private fun InfoTab(onOpenLicenses: () -> Unit) {
             colors = CardDefaults.defaultColors(color = colors.card)
         ) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                BasicComponent(title = "版本", summary = "2.0.0")
+                BasicComponent(title = "版本", summary = versionName)
                 ArrowPreference(
                     title = "GitHub 开源页面",
                     summary = "ControlLayoutConverter",
