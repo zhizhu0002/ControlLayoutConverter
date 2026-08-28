@@ -29,16 +29,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      # 移除本机专用的 aapt2 路径覆盖，让 CI 使用标准 SDK 的 aapt2
-      - name: Strip machine-specific aapt2 override
+      # 修复本机 Termux 特定的 gradlew shebang 与 aapt2 路径，让 CI（Ubuntu）可执行
+      - name: Make gradlew portable for CI
         run: |
+          sed -i '1s|^#!.*$|#!/bin/sh|' gradlew
           sed -i '/aapt2FromMavenOverride/d' gradle.properties || true
+          echo "--- gradlew shebang ---"
+          head -1 gradlew
           echo "--- gradle.properties (CI) ---"
           cat gradle.properties
 
@@ -50,7 +53,7 @@ jobs:
           chmod 600 release.keystore
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: sh gradlew assembleDebug --stacktrace
 
       - name: Build Signed Release APK
         if: env.RELEASE_KEYSTORE != '' && env.KEYSTORE_PASSWORD != '' && env.KEY_ALIAS != '' && env.KEY_PASSWORD != ''
@@ -59,7 +62,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ env.KEY_ALIAS }}
           KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: sh gradlew assembleRelease --stacktrace
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
