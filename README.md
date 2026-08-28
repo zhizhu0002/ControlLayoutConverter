@@ -1,8 +1,6 @@
 # ControlLayoutConverter
 
-一个针对 **Minecraft 基岩版（PojavLauncher / FCL / 游侠）使用的控件布局 JSON** 的格式转换工具。支持在 **FCL（FoldCraftLauncher）**、**ZL1（游侠旧版）**、**ZL2（游侠新版 / 控制布局）** 三种布局格式之间相互转换。
-
-> 原项目名：`ControlLayoutConverter`（包 `com.zhizhu.controlconverter`）。早期阶段名称为 `com.iqge.controlconverter`。
+一个针对 **手机上的Minecraft Java版启动器使用的控件布局** 的格式转换工具。支持在 **FoldCraftLauncher**、**ZalithLauncher**、**ZalithLauncher2** 三种启动器的布局格式之间相互转换。
 
 ---
 
@@ -16,11 +14,10 @@
 - ✅ **1:1 控件转换**（结构/控件数守恒，Kotlin 引擎内建守恒自检）
 - ✅ **Compose + Miuix 现代 UI**（暗色模式适配）
 - ✅ **复制结果 / 保存为 JSON 文件**
-- ✅ **崩溃日志记录**（内置 `CrashLogStore`）
 
 ---
 
-## 🗂 支持的格式
+## 支持的格式
 
 | 格式 | 说明 | 典型来源 |
 |---|---|---|
@@ -30,7 +27,7 @@
 
 ---
 
-## 🔁 转换引擎与优先级
+## 转换引擎与优先级
 
 项目内置了多种转换引擎，按优先级自动路由，**某一级失败会自动回退到下一级**：
 
@@ -55,7 +52,7 @@
 
 ---
 
-## 📁 项目结构
+## 项目结构
 
 ```
 controlconverter/
@@ -93,8 +90,6 @@ controlconverter/
 - **AGP 9.1.1 · Kotlin 2.4.0**
 - 仅支持 **arm64-v8a** ABI（原生 libcc.so）
 
-> ⚠️ 项目中 `.gitignore` 已忽略 `local.properties`（本机 SDK 路径）与 `release.keystore`（签名证书）。克隆后请自行配置 `local.properties`（指向你的 Android SDK）与本地签名证书。
-
 ---
 
 ## 🔨 构建
@@ -120,6 +115,5 @@ controlconverter/
 ## 🙏 致谢
 
 - [FoldCraftLauncher](https://github.com/FoldCraftLauncher)（FCL 布局）
-- 游侠 / ZL 布局格式
 - [Miuix](https://github.com/YuKongA)（Compose UI 组件库）
-- cc.miawa.cn（在线转换接口）
+- api.cc.miawa.cn（在线转换接口）
