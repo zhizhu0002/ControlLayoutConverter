@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 浅色模式主题（默认）。系统栏透明，配合 enableEdgeToEdge 让内容延伸全屏；
+         状态/导航栏图标颜色与背景色由 SystemBarsIconColor 运行时设置，保证浅色下可见。 -->
+    <style name="Theme.ControlLayoutConverter" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 默认 = 浅色模式：浅灰窗口背景（与 Compose Scaffold 背板同色） -->
+    <color name="window_background">#F1F3F8</color>
+    <color name="system_bar_color">#F1F3F8</color>
+</resources>

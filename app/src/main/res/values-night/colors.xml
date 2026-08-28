@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式窗口背景（与 Compose 背板衔接） -->
+    <color name="window_background">#101318</color>
+    <color name="system_bar_color">#101318</color>
+</resources>

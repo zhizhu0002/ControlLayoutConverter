@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+
+# Kotlin
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+.vscode/
+
+# 签名密钥（绝不上传公开仓库）
+*.jks
+*.keystore
+
+# 日志
+*.log

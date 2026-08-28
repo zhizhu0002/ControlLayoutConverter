@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式主题：不透明状态栏，深色窗口背景 -->
+    <style name="Theme.ControlLayoutConverter" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/system_bar_color</item>
+        <item name="android:navigationBarColor">@color/system_bar_color</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>
