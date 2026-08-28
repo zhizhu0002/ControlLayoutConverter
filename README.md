@@ -57,6 +57,15 @@ APK 输出在 `app/build/outputs/apk/`。
 
 ---
 
+## 贡献
+
+欢迎参与本项目的开发！详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+- **核心协作者**：由仓库所有者邀请为 Collaborator，可直接 push。
+- **外部贡献者**：通过 **Fork + Pull Request** 提交改动。
+
+---
+
 ## 许可证
 
 本项目基于 [MIT](LICENSE) 许可开源。第三方依赖许可证见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
