@@ -22,10 +22,15 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = rootProject.file("release.keystore")
-            storePassword = "zhizhu0001"
-            keyAlias = "zhizhu0001"
-            keyPassword = "zhizhu0001"
+            // 签名配置：优先读取 CI 环境变量（GitHub Secret 注入），否则回退到本地 release.keystore。
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            val ksPass = System.getenv("KEYSTORE_PASSWORD")
+            val keyAlias = System.getenv("KEY_ALIAS")
+            val keyPass = System.getenv("KEY_PASSWORD")
+            storeFile = if (!ksPath.isNullOrBlank()) file(ksPath) else rootProject.file("release.keystore")
+            storePassword = ksPass ?: "zhizhu0001"
+            this.keyAlias = keyAlias ?: "zhizhu0001"
+            keyPassword = keyPass ?: "zhizhu0001"
         }
     }
 

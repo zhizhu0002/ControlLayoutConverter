@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build Debug & Release APK
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,8 +30,24 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # 仅当提供 RELEASE_KEYSTORE base64 时解码签名密钥（Push/Pull 时可跳过）
+      - name: Decode release keystore
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 --decode > release.keystore
+          chmod 600 release.keystore
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build Signed Release APK
+        if: ${{ secrets.RELEASE_KEYSTORE != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' }}
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
@@ -39,4 +55,13 @@ jobs:
           name: controlconverter-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Release APK artifact
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: controlconverter-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
           retention-days: 7
