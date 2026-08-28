@@ -13,6 +13,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,42 +21,34 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -68,27 +61,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowInsetsControllerCompat
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -98,6 +96,12 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Info
 import kotlin.math.max
 import kotlin.math.min
 import java.util.Base64
@@ -106,6 +110,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import android.content.Intent
+import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -430,6 +435,292 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ConverterApp() {
+    val isDark = isSystemInDarkTheme()
+    val colors = if (isDark) DarkAppColors else LightAppColors
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val themeController = remember(isDark) {
+        ThemeController(
+            colorSchemeMode = if (isDark) ColorSchemeMode.Dark else ColorSchemeMode.Light,
+            lightColors = lightColorScheme(
+                primary = Accent,
+                background = LightAppColors.bg,
+                onBackground = LightAppColors.text,
+                surface = LightAppColors.bg,
+                onSurface = LightAppColors.text,
+                surfaceContainer = LightAppColors.card,
+                onSurfaceContainer = LightAppColors.text,
+                surfaceVariant = LightAppColors.input,
+                outline = LightAppColors.inputBorder,
+                dividerLine = LightAppColors.pillBorder
+            ),
+            darkColors = darkColorScheme(
+                primary = Accent,
+                background = DarkAppColors.bg,
+                onBackground = DarkAppColors.text,
+                surface = DarkAppColors.bg,
+                onSurface = DarkAppColors.text,
+                surfaceContainer = DarkAppColors.card,
+                onSurfaceContainer = DarkAppColors.text,
+                surfaceVariant = DarkAppColors.input,
+                outline = DarkAppColors.inputBorder,
+                dividerLine = DarkAppColors.pillBorder
+            )
+        )
+    }
+
+    MiuixTheme(controller = themeController) {
+        CompositionLocalProvider(LocalLayoutColors provides colors) {
+            SystemBarsIconColor(isDarkTheme = isDark)
+            var showLicenses by rememberSaveable { mutableStateOf(false) }
+            BackHandler(enabled = showLicenses) { showLicenses = false }
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = colors.bg,
+                bottomBar = {
+                    AnimatedVisibility(
+                        visible = !showLicenses,
+                        enter = slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),
+                        exit = slideOutVertically(tween(240, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(150))
+                    ) {
+                    NavigationBar(
+                        color = colors.bg,
+                        showDivider = true,
+                        defaultWindowInsetsPadding = false,
+                        mode = NavigationBarDisplayMode.IconAndText
+                    ) {
+                        NavigationBarItem(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            icon = MiuixIcons.Home,
+                            label = "主页"
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            icon = MiuixIcons.Info,
+                            label = "关于"
+                        )
+                    }
+                    }
+                }
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.bg)
+                ) {
+                    AnimatedContent(
+                        targetState = showLicenses,
+                        transitionSpec = {
+                            if (targetState) {
+                                (slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))) togetherWith
+                                    (slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { -it / 4 } + fadeOut(tween(150)))
+                            } else {
+                                (slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { -it / 4 } + fadeIn(tween(200))) togetherWith
+                                    (slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(150)))
+                            }
+                        },
+                        label = "pageContent"
+                    ) { licenses ->
+                        if (licenses) {
+                            LicensesPage(onBack = { showLicenses = false })
+                        } else {
+                            Box(Modifier.fillMaxSize().padding(paddingValues)) {
+                            AnimatedContent(
+                                targetState = selectedTab,
+                                transitionSpec = {
+                                    val dir = if (targetState > initialState) 1 else -1
+                                    (slideInHorizontally(tween(260, easing = FastOutSlowInEasing)) { it / 4 * dir } + fadeIn(tween(200))) togetherWith
+                                        (slideOutHorizontally(tween(220, easing = FastOutSlowInEasing)) { -it / 4 * dir } + fadeOut(tween(150)))
+                                },
+                                label = "tabContent"
+                            ) { tab ->
+                                if (tab == 0) HomeTab() else InfoTab(onOpenLicenses = { showLicenses = true })
+                            }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoTab(onOpenLicenses: () -> Unit) {
+    val activity = LocalContext.current as MainActivity
+    val colors = layoutColors()
+
+    fun openUrl(url: String) {
+        runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        Text(
+            "关于",
+            style = MiuixTheme.textStyles.title1,
+            fontWeight = FontWeight.Bold,
+            color = colors.text,
+            modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 6.dp)
+        )
+
+        SmallTitle(text = "应用", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+            cornerRadius = 16.dp,
+            colors = CardDefaults.defaultColors(color = colors.card)
+        ) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                BasicComponent(title = "版本", summary = "2.0.0")
+                ArrowPreference(
+                    title = "GitHub 开源页面",
+                    summary = "ControlLayoutConverter",
+                    onClick = { openUrl("https://github.com/zhizhu0002/ControlLayoutConverter") }
+                )
+            }
+        }
+
+        SmallTitle(text = "关于", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+            cornerRadius = 16.dp,
+            colors = CardDefaults.defaultColors(color = colors.card)
+        ) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                BasicComponent(title = "开发者", summary = "zhizhu0002")
+                BasicComponent(title = "开源许可证", summary = "MIT License")
+                ArrowPreference(
+                    title = "第三方开源项目",
+                    summary = "查看许可证与致谢",
+                    onClick = onOpenLicenses
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun LicensesPage(onBack: () -> Unit) {
+    val activity = LocalContext.current as MainActivity
+    val colors = layoutColors()
+
+    fun openUrl(url: String) {
+        runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+
+    Column(Modifier.fillMaxSize().background(colors.bg)) {
+        SmallTopAppBar(
+            title = "第三方开源项目",
+            color = colors.bg,
+            titleColor = colors.text,
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(MiuixIcons.Back, contentDescription = "返回", tint = colors.text)
+                }
+            }
+        )
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            Text(
+                "ControlLayoutConverter 用到了下面这些开源项目。点击任意一项可以打开它的主页，去看它自己的许可证原文。",
+                style = MiuixTheme.textStyles.body2,
+                color = colors.textSecondary,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+
+            SmallTitle(text = "运行时库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 4.dp))
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+                cornerRadius = 16.dp,
+                colors = CardDefaults.defaultColors(color = colors.card)
+            ) {
+                Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    ArrowPreference(
+                        title = "Jetpack Compose",
+                        summary = "Android Open Source Project · Apache License 2.0",
+                        onClick = { openUrl("https://github.com/JetBrains/compose-multiplatform") }
+                    )
+                    ArrowPreference(
+                        title = "AndroidX",
+                        summary = "Android Open Source Project · Apache License 2.0",
+                        onClick = { openUrl("https://github.com/androidx/androidx") }
+                    )
+                }
+            }
+
+            SmallTitle(text = "组件库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+                cornerRadius = 16.dp,
+                colors = CardDefaults.defaultColors(color = colors.card)
+            ) {
+                Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    ArrowPreference(
+                        title = "Miuix",
+                        summary = "compose-miuix-ui · Apache License 2.0",
+                        onClick = { openUrl("https://github.com/YuKongA/miuix") }
+                    )
+                    ArrowPreference(
+                        title = "Backdrop",
+                        summary = "Kyant0 · Apache License 2.0",
+                        onClick = { openUrl("https://github.com/Kyant0/backdrop") }
+                    )
+                }
+            }
+
+            SmallTitle(text = "原生转换库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+                cornerRadius = 16.dp,
+                colors = CardDefaults.defaultColors(color = colors.card)
+            ) {
+                Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    ArrowPreference(
+                        title = "control-converter",
+                        summary = "NingZeStudio · MIT License",
+                        onClick = { openUrl("https://github.com/NingZeStudio/control-converter") }
+                    )
+                }
+            }
+
+            SmallTitle(text = "在线服务", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+                cornerRadius = 16.dp,
+                colors = CardDefaults.defaultColors(color = colors.card)
+            ) {
+                Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    ArrowPreference(
+                        title = "api.cc.miawa.cn",
+                        summary = "在线转换接口 · 可选使用",
+                        onClick = { openUrl("https://api.cc.miawa.cn") }
+                    )
+                }
+            }
+
+            Text(
+                "你知道吗：其实本软件的大部分UI都是借鉴 MobileGlues（https://github.com/MobileGL-Dev/MobileGlues-release）的",
+                style = MiuixTheme.textStyles.footnote2,
+                color = colors.textSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { openUrl("https://github.com/MobileGL-Dev/MobileGlues-release") }
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun HomeTab() {
     val activity = LocalContext.current as MainActivity
 
     var source by remember { mutableStateOf("") }
@@ -516,14 +807,13 @@ private fun ConverterApp() {
     MiuixTheme(controller = themeController) {
         CompositionLocalProvider(LocalLayoutColors provides layoutColors) {
             SystemBarsIconColor(isDarkTheme = isDark)
-            Scaffold(containerColor = layoutColors.bg) { padding ->
-                Column(
-                    Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
                     // ===== Header =====
                     Row(
-                        Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                        Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -538,74 +828,86 @@ private fun ConverterApp() {
                                 "FCL · ZL1/Pojav · ZL2",
                                 style = MiuixTheme.textStyles.body2,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Accent
+                                color = MiuixTheme.colorScheme.primary
                             )
                         }
                     }
 
                     // ===== Status =====
-                    StatusPill(status, busy)
+                    Text(
+                        if (busy) "处理中 · $status" else status,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MiuixTheme.textStyles.body2,
+                        color = when {
+                            busy -> MiuixTheme.colorScheme.primary
+                            status.startsWith("转换失败") || status.startsWith("读取失败") || status.startsWith("保存失败") -> Error
+                            status.startsWith("转换完成") || status.startsWith("结果已复制") || status.startsWith("已保存") -> Success
+                            else -> layoutColors().textSecondary
+                        }
+                    )
 
                     // ===== 格式选择 =====
-                    SmallTitle(text = "格式选择", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 2.dp))
+                    SmallTitle(text = "格式选择", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                     Card(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                         cornerRadius = 16.dp,
                         colors = CardDefaults.defaultColors(color = layoutColors().card)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                             // 输入格式
-                            Text("输入格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 6.dp))
-                            FormatSegmented(
-                                items = listOf("自动", "FCL", "ZL1/Pojav", "ZL2"),
-                                values = listOf("自动", "FCL", "ZL1", "ZL2"),
-                                selected = input,
-                                onSelect = { input = it },
+                            Text("输入格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                            val inputItems = listOf("自动", "FCL", "ZL1/Pojav", "ZL2")
+                            val inputValues = listOf("自动", "FCL", "ZL1", "ZL2")
+                            TabRowWithContour(
+                                tabs = inputItems,
+                                selectedTabIndex = inputValues.indexOf(input).coerceAtLeast(0),
+                                onTabSelected = { input = inputValues[it] },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             // 输出格式
-                            Text("输出格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 6.dp))
-                            FormatSegmented(
-                                items = listOf("FCL", "ZL1/Pojav", "ZL2"),
-                                values = listOf("FCL", "ZL1", "ZL2"),
-                                selected = output,
-                                onSelect = { output = it },
+                            Text("输出格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                            val outputItems = listOf("FCL", "ZL1/Pojav", "ZL2")
+                            val outputValues = listOf("FCL", "ZL1", "ZL2")
+                            TabRowWithContour(
+                                tabs = outputItems,
+                                selectedTabIndex = outputValues.indexOf(output).coerceAtLeast(0),
+                                onTabSelected = { output = outputValues[it] },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             // 在线转换开关（调用 api.cc.miawa.cn，仅 FCL↔ZL2 时生效）
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        "在线转换",
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = layoutColors().text
-                                    )
-                                    Text(
-                                        "开启后 FCL ↔ ZL2 将调用 cc.miawa.cn 在线转换",
-                                        style = MiuixTheme.textStyles.footnote2,
-                                        color = layoutColors().textSecondary,
-                                        modifier = Modifier.padding(top = 2.dp)
+                            BasicComponent(
+                                insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                onClick = { online = !online },
+                                endActions = {
+                                    Switch(
+                                        checked = online,
+                                        onCheckedChange = { online = it }
                                     )
                                 }
-                                Switch(
-                                    checked = online,
-                                    onCheckedChange = { online = it }
+                            ) {
+                                Text(
+                                    "在线转换（仅支持ZL2、FCL互转）",
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = layoutColors().text,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "FCL ↔ ZL2 时调用 cc.miawa.cn 转换",
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = layoutColors().textSecondary
                                 )
                             }
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             // 自动识别说明（仅输入格式为「自动」时显示，带展开/收起过渡动画）
                             AnimatedVisibility(
@@ -618,31 +920,31 @@ private fun ConverterApp() {
                                     style = MiuixTheme.textStyles.footnote2,
                                     color = layoutColors().textSecondary,
                                     modifier = Modifier
-                                        .padding(start = 2.dp)
-                                        .padding(bottom = 2.dp)
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 2.dp, vertical = 2.dp)
                                 )
                             }
                         }
                     }
 
                     // ===== 布局 Section =====
-                    SmallTitle(text = "布局", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 2.dp))
+                    SmallTitle(text = "布局", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                     Card(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                         cornerRadius = 16.dp,
                         colors = CardDefaults.defaultColors(color = layoutColors().card)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                             // Tab: 粘贴 / 选择文件（切换复用窗口）
-                            MiuixSegmented(
-                                items = listOf("粘贴", "选择文件"),
-                                selectedIndex = if (inputTab == "粘贴") 0 else 1,
-                                onSelect = { inputTab = if (it == 0) "粘贴" else "选择文件" },
-                                containerHeight = 44.dp,
+                            val inputTabs = listOf("粘贴", "选择文件")
+                            TabRowWithContour(
+                                tabs = inputTabs,
+                                selectedTabIndex = if (inputTab == "粘贴") 0 else 1,
+                                onTabSelected = { inputTab = inputTabs[it] },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             // 布局名称输入框（占满整行）
                             TextField(
@@ -658,7 +960,7 @@ private fun ConverterApp() {
                                 )
                             )
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             // 内容区（按 TAB 切换，带过渡动画）
                             AnimatedContent(
@@ -671,29 +973,41 @@ private fun ConverterApp() {
                                 label = "layoutContent"
                             ) { tab ->
                                 if (tab == "粘贴") {
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        Text("JSON 内容", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 6.dp))
-                                        JsonInputField(
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        TextField(
                                             value = source,
                                             onValueChange = { source = it },
-                                            placeholder = "粘贴 FCL、ZL1 或 ZL2 JSON",
-                                            modifier = Modifier.fillMaxWidth().height(140.dp)
+                                            modifier = Modifier.fillMaxWidth(),
+                                            minLines = 4,
+                                            maxLines = 8,
+                                            colors = TextFieldDefaults.textFieldColors(
+                                                backgroundColor = layoutColors().input,
+                                                labelColor = layoutColors().textSecondary,
+                                                borderColor = Color.Transparent
+                                            )
                                         )
+                                        if (source.isEmpty()) {
+                                            Text(
+                                                "粘贴 FCL、ZL1 或 ZL2 json内容",
+                                                style = MiuixTheme.textStyles.main,
+                                                color = layoutColors().textSecondary,
+                                                modifier = Modifier
+                                                    .align(Alignment.Center)
+                                                    .padding(horizontal = 16.dp)
+                                            )
+                                        }
                                     }
                                 } else {
                                     // 选择布局文件按钮（占满整行）
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = layoutColors().slot,
-                                        modifier = Modifier.fillMaxWidth().clickable { pick.launch(arrayOf("application/json", "text/plain")) }
-                                    ) {
-                                        Box(
-                                            Modifier.fillMaxWidth().height(48.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text("选择布局文件", style = MiuixTheme.textStyles.body1, color = layoutColors().text)
-                                        }
-                                    }
+                                    Button(
+                                        onClick = { pick.launch(arrayOf("application/json", "text/plain")) },
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        cornerRadius = 12.dp,
+                                        colors = ButtonDefaults.buttonColors(
+                                            color = layoutColors().slot,
+                                            contentColor = layoutColors().text
+                                        )
+                                    ) { Text("选择布局文件", style = MiuixTheme.textStyles.body1) }
                                 }
                             }
                         }
@@ -726,11 +1040,11 @@ private fun ConverterApp() {
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).height(54.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(52.dp),
                         cornerRadius = 14.dp,
                         colors = ButtonDefaults.buttonColors(
-                            color = Accent,
-                            disabledColor = Accent.copy(alpha = 0.4f),
+                            color = MiuixTheme.colorScheme.primary,
+                            disabledColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.4f),
                             contentColor = Color.White,
                             disabledContentColor = Color.White.copy(alpha = 0.7f)
                         )
@@ -743,13 +1057,13 @@ private fun ConverterApp() {
                         exit = fadeOut(tween(150))
                     ) {
                         Column {
-                            SmallTitle(text = "输出结果", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 2.dp))
+                            SmallTitle(text = "输出结果", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                             Card(
-                                Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                                 cornerRadius = 16.dp,
                                 colors = CardDefaults.defaultColors(color = layoutColors().card)
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                     // 结果信息标题
                                     Text(
                                         "转换结果",
@@ -784,12 +1098,12 @@ private fun ConverterApp() {
                                         ) { Text("复制", style = MiuixTheme.textStyles.body2) }
                                     }
                                     Spacer(Modifier.height(8.dp))
-                                    // 展开 / 收起按钮（置于复制按钮之下）
-                                    Button(
+                                    // 展开 / 收起（官方文字按钮）
+                                    TextButton(
+                                        text = if (resultExpanded) "收起结果" else "展开结果",
                                         onClick = { resultExpanded = !resultExpanded },
-                                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                                        cornerRadius = 12.dp
-                                    ) { Text(if (resultExpanded) "收起结果" else "展开结果", style = MiuixTheme.textStyles.body2) }
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
 
                                     // 展开 / 收起的 JSON 预览（带展开收起过渡动画）
                                     AnimatedVisibility(
@@ -799,11 +1113,24 @@ private fun ConverterApp() {
                                     ) {
                                         Column {
                                             Spacer(Modifier.height(12.dp))
-                                            JsonPreview(
-                                                value = result,
-                                                pretty = output != "ZL1",
-                                                modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp)
-                                            )
+                                            Card(
+                                                Modifier.fillMaxWidth(),
+                                                cornerRadius = 12.dp,
+                                                colors = CardDefaults.defaultColors(color = layoutColors().input)
+                                            ) {
+                                                Text(
+                                                    if (output != "ZL1") prettyJson(result) else result,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .heightIn(max = 250.dp)
+                                                        .verticalScroll(rememberScrollState())
+                                                        .padding(12.dp),
+                                                    color = layoutColors().text,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 16.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -811,60 +1138,58 @@ private fun ConverterApp() {
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
-                }
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
 
     // Log Dialog
-    if (showLog) {
-        SimpleDialog(
-            title = "日志",
-            onDismiss = { showLog = false }
-        ) {
-            Box(Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                Text(buildString {
-                    if (conversionFailLog.isNotBlank()) {
-                        appendLine("=== 转换失败日志 ===")
-                        append("最近失败原因：")
-                        append(
-                            // 从原始失败日志里取 message= 行，映射为友好文案
-                            runCatching {
-                                Regex("message=(.+)").find(conversionFailLog)?.groupValues?.get(1)
-                            }.getOrNull()?.let { friendlyError(it, "-", "-") } ?: conversionFailLog
-                        )
-                        appendLine()
-                        append(conversionFailLog)
-                    } else {
-                        appendLine("=== 转换失败日志 ===")
-                        append("暂无")
-                    }
-                    appendLine("\n=== 运行日志 ===")
-                    append(runtimeLog.ifBlank { "暂无" })
-                    appendLine("\n=== 崩溃日志 ===")
-                    append(crashLog.ifBlank { "暂无" })
-                }, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = layoutColors().text)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 12.dp)) {
-                val allLogs = buildString {
+    WindowDialog(
+        show = showLog,
+        title = "日志",
+        onDismissRequest = { showLog = false }
+    ) {
+        Box(Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+            Text(buildString {
+                if (conversionFailLog.isNotBlank()) {
                     appendLine("=== 转换失败日志 ===")
+                    append("最近失败原因：")
+                    append(
+                        // 从原始失败日志里取 message= 行，映射为友好文案
+                        runCatching {
+                            Regex("message=(.+)").find(conversionFailLog)?.groupValues?.get(1)
+                        }.getOrNull()?.let { friendlyError(it, "-", "-") } ?: conversionFailLog
+                    )
+                    appendLine()
                     append(conversionFailLog)
-                    appendLine("\n=== 运行日志 ===")
-                    append(runtimeLog)
-                    appendLine("\n=== 崩溃日志 ===")
-                    append(crashLog)
+                } else {
+                    appendLine("=== 转换失败日志 ===")
+                    append("暂无")
                 }
-                if (runtimeLog.isNotBlank() || crashLog.isNotBlank() || conversionFailLog.isNotBlank()) {
-                    TextButton(text = "复制", onClick = {
-                        (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                            .setPrimaryClip(ClipData.newPlainText("日志", allLogs))
-                        status = "日志已复制"
-                    })
-                    TextButton(text = "清除", onClick = { CrashLogStore.clear(activity); crashLog = ""; runtimeLog = ""; conversionFailLog = ""; showLog = false })
-                }
-                TextButton(text = "关闭", onClick = { showLog = false })
+                appendLine("\n=== 运行日志 ===")
+                append(runtimeLog.ifBlank { "暂无" })
+                appendLine("\n=== 崩溃日志 ===")
+                append(crashLog.ifBlank { "暂无" })
+            }, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = layoutColors().text)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 12.dp)) {
+            val allLogs = buildString {
+                appendLine("=== 转换失败日志 ===")
+                append(conversionFailLog)
+                appendLine("\n=== 运行日志 ===")
+                append(runtimeLog)
+                appendLine("\n=== 崩溃日志 ===")
+                append(crashLog)
             }
+            if (runtimeLog.isNotBlank() || crashLog.isNotBlank() || conversionFailLog.isNotBlank()) {
+                TextButton(text = "复制", onClick = {
+                    (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("日志", allLogs))
+                    status = "日志已复制"
+                })
+                TextButton(text = "清除", onClick = { CrashLogStore.clear(activity); crashLog = ""; runtimeLog = ""; conversionFailLog = ""; showLog = false })
+            }
+            TextButton(text = "关闭", onClick = { showLog = false })
         }
     }
 }
@@ -885,228 +1210,10 @@ private fun SystemBarsIconColor(isDarkTheme: Boolean) {
     }
 }
 
-@Composable
-private fun StatusPill(text: String, busy: Boolean) {
-    val colors = layoutColors()
-    val color = when {
-        busy -> Accent
-        text.startsWith("转换失败") || text.startsWith("读取失败") || text.startsWith("保存失败") -> Error
-        text.startsWith("转换完成") || text.startsWith("结果已复制") || text.startsWith("已保存") -> Success
-        else -> colors.textSecondary
-    }
-    Text(
-        if (busy) "处理中 · $text" else text,
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
-        style = MiuixTheme.textStyles.body2,
-        color = color
-    )
-}
 
-// 格式分段选择器（Step 1）
-@Composable
-private fun FormatSegmented(
-    items: List<String>,
-    selected: String,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    values: List<String> = items
-) {
-    val colors = layoutColors()
-    val selectedIndex = items.indices.firstOrNull { values[it] == selected } ?: 0
 
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bg)
-            .padding(4.dp)
-    ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val segWidth = maxWidth / items.size
-            val targetOffset = segWidth * selectedIndex
-            val pillOffset by animateDpAsState(
-                targetValue = targetOffset,
-                animationSpec = tween(250, easing = FastOutSlowInEasing),
-                label = "pillOffset"
-            )
 
-            // 选中背景（扁平高光：无描边）
-            Box(
-                Modifier
-                    .offset(x = pillOffset)
-                    .width(segWidth)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.pill)
-            )
 
-            Row(Modifier.fillMaxWidth()) {
-                items.indices.forEach { i ->
-                    val item = items[i]
-                    val value = values[i]
-                    val isSelected = value == selected
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { onSelect(value) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            item,
-                            style = MiuixTheme.textStyles.body2,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) colors.text else colors.textSecondary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// 通用分段选择器
-@Composable
-private fun MiuixSegmented(
-    items: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    containerHeight: Dp = 40.dp,
-    showCheck: Boolean = false
-) {
-    val colors = layoutColors()
-
-    Box(
-        modifier = modifier
-            .height(containerHeight)
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bg)
-            .padding(4.dp)
-    ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val segWidth = maxWidth / items.size
-            val targetOffset = segWidth * selectedIndex
-            val pillOffset by animateDpAsState(
-                targetValue = targetOffset,
-                animationSpec = tween(250, easing = FastOutSlowInEasing),
-                label = "pillOffset"
-            )
-
-            Box(
-                Modifier
-                    .offset(x = pillOffset)
-                    .width(segWidth)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.pill)
-            )
-
-            Row(Modifier.fillMaxWidth()) {
-                items.forEachIndexed { i, label ->
-                    val isSelected = i == selectedIndex
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { onSelect(i) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (showCheck && isSelected) {
-                                Text(
-                                    "✓ ",
-                                    style = MiuixTheme.textStyles.body2,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.text
-                                )
-                            }
-                            Text(
-                                label,
-                                style = MiuixTheme.textStyles.body2,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) colors.text else colors.textSecondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// JSON 输入框
-@Composable
-private fun JsonInputField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    modifier: Modifier = Modifier
-) {
-    val colors = layoutColors()
-    val scrollState = rememberScrollState()
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = colors.input,
-        modifier = modifier
-    ) {
-        Box(Modifier.fillMaxSize().padding(12.dp).verticalScroll(scrollState)) {
-            if (value.isBlank()) {
-                Text(placeholder, color = colors.textSecondary, style = MiuixTheme.textStyles.body2)
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(
-                    color = colors.text,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
-            )
-        }
-    }
-}
-
-// JSON 预览（只读）
-@Composable
-private fun JsonPreview(
-    value: String,
-    modifier: Modifier = Modifier,
-    pretty: Boolean = true
-) {
-    val colors = layoutColors()
-    val scrollState = rememberScrollState()
-    // 对超大 JSON 的 pretty 重排只在 value 变化时计算一次；
-    // 展开/收起动画每帧都会触发重组，若不缓存会对全量 JSON 反复扫描造成卡顿。
-    val displayed = remember(value, pretty) { if (pretty) prettyJson(value) else value }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = colors.input,
-        modifier = modifier
-    ) {
-        Box(Modifier.fillMaxSize().padding(12.dp).verticalScroll(scrollState)) {
-            SelectionContainer {
-                Text(
-                    displayed,
-                    color = colors.text,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
-            }
-        }
-    }
-}
 
 /**
  * 纯文本 JSON 美化器：只重排缩进/换行，绝不重新解析数值。
@@ -1181,51 +1288,6 @@ private fun appendLineIndent(out: StringBuilder, indent: Int) {
     out.append("  ".repeat(indent))
 }
 
-// 简单弹窗
-@Composable
-private fun SimpleDialog(
-    title: String,
-    onDismiss: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val colors = layoutColors()
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                )
-                .background(colors.card, RoundedCornerShape(16.dp))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(title, style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold, color = colors.text)
-                TextButton(text = "✕", onClick = onDismiss)
-            }
-            content()
-        }
-    }
-}
 
 private fun exportBaseName(name: String, source: String, target: String): String {
     val cleanName = name.replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_").trim('_').ifBlank { "控制布局" }
