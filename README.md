@@ -61,8 +61,6 @@ APK 输出在 `app/build/outputs/apk/`。
 
 欢迎参与本项目的开发！详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-- **核心协作者**：由仓库所有者邀请为 Collaborator，可直接 push。
-- **外部贡献者**：通过 **Fork + Pull Request** 提交改动。
 
 ---
 
