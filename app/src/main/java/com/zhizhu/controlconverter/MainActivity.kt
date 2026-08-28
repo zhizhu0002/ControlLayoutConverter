@@ -53,6 +53,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -271,9 +272,10 @@ class MainActivity : ComponentActivity() {
                         else -> "web-engine"
                     }
                     CrashLogStore.log(this, "conversion-success", "backend=$backend direction=$input-$output resultLength=${rawResult.length}")
-                    // 大 JSON 的合法性校验与 pretty 预处理移到后台线程，避免主线程解析造成卡顿。
-                    val ok = runCatching { JSONObject(rawResult) }.isSuccess && rawResult.isNotBlank()
-                    runOnUiThread { done(if (ok) rawResult else "__ERROR__:__INVALID_JSON__") }
+                    // 大 JSON 的合法性校验与压缩移到后台线程：引擎输出若带缩进，压缩后可显著减小导出体积
+                    val parsed = runCatching { JSONObject(rawResult) }
+                    val compact = parsed.map { it.toString() }.getOrDefault(rawResult)
+                    runOnUiThread { done(if (parsed.isSuccess && rawResult.isNotBlank()) compact else "__ERROR__:__INVALID_JSON__") }
                 }
                 .onFailure { error ->
                     CrashLogStore.log(this, "conversion-failed", "direction=$input-$output type=${error::class.java.simpleName}")
@@ -725,6 +727,40 @@ private fun LicensesPage(onBack: () -> Unit) {
     }
 }
 
+/** JSON 粘贴输入：独立 Composable 隔离重组范围，大文本编辑时避免整页重组造成卡顿。 */
+@Composable
+private fun JsonPasteField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    inputColor: Color,
+    labelColor: Color
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 4,
+            maxLines = 8,
+            colors = TextFieldDefaults.textFieldColors(
+                backgroundColor = inputColor,
+                labelColor = labelColor,
+                borderColor = Color.Transparent
+            )
+        )
+        if (value.isEmpty()) {
+            Text(
+                "粘贴 FCL、ZL1 或 ZL2 json内容",
+                style = MiuixTheme.textStyles.main,
+                color = labelColor,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun HomeTab() {
     val activity = LocalContext.current as MainActivity
@@ -746,6 +782,8 @@ private fun HomeTab() {
     var showLog by remember { mutableStateOf(false) }
     var showResult by remember { mutableStateOf(false) }
     var resultExpanded by remember { mutableStateOf(false) }
+    // 仅在空/非空翻转时才触发整页重组，避免大 JSON 编辑时每次按键都重组全部 TabRow
+    val hasSource by remember { derivedStateOf { source.isNotBlank() } }
 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -979,30 +1017,12 @@ private fun HomeTab() {
                                 label = "layoutContent"
                             ) { tab ->
                                 if (tab == "粘贴") {
-                                    Box(modifier = Modifier.fillMaxWidth()) {
-                                        TextField(
-                                            value = source,
-                                            onValueChange = { source = it },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            minLines = 4,
-                                            maxLines = 8,
-                                            colors = TextFieldDefaults.textFieldColors(
-                                                backgroundColor = layoutColors().input,
-                                                labelColor = layoutColors().textSecondary,
-                                                borderColor = Color.Transparent
-                                            )
-                                        )
-                                        if (source.isEmpty()) {
-                                            Text(
-                                                "粘贴 FCL、ZL1 或 ZL2 json内容",
-                                                style = MiuixTheme.textStyles.main,
-                                                color = layoutColors().textSecondary,
-                                                modifier = Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(horizontal = 16.dp)
-                                            )
-                                        }
-                                    }
+                                    JsonPasteField(
+                                        value = source,
+                                        onValueChange = { source = it },
+                                        inputColor = layoutColors().input,
+                                        labelColor = layoutColors().textSecondary
+                                    )
                                 } else {
                                     // 选择布局文件按钮（占满整行）
                                     Button(
@@ -1021,7 +1041,7 @@ private fun HomeTab() {
 
                     // ===== Convert Button =====
                     Button(
-                        enabled = source.isNotBlank() && !busy,
+                        enabled = hasSource && !busy,
                         onClick = {
                             busy = true
                             status = "正在转换…"
