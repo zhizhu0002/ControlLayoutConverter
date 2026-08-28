@@ -1,10 +1,10 @@
 # ControlLayoutConverter
 
-手机 **Java 版启动器**的控件布局转换工具。用于在不同启动器使用的控件布局 JSON 之间互转，方便直接套用别人做好的按键布局。
+手机 **Minecraft Java版启动器**的控件布局转换工具。用于在不同启动器使用的控件布局 JSON 之间互转。
 
 支持三种格式：**FCL**、**ZL1**、**ZL2**。
 
-- **FCL** — `viewGroups` 结构（FoldCraftLauncher / Pojav 等）
+- **FCL** — `viewGroups` 结构（FoldCraftLauncher等）
 - **ZL1** — `mControlDataList` 结构（ZalithLauncher）
 - **ZL2** — `layers` 结构（ZalithLauncher2）
 
@@ -17,7 +17,7 @@
 - **FCL ↔ ZL1** 互转（经 ZL2 中转）
 - 输入格式**自动识别**
 - 在线转换（可选，FCL↔ZL2），失败自动回退本地引擎
-- Compose + Miuix UI，适配暗色模式
+- Compose + Miuix UI
 
 ---
 
@@ -35,7 +35,7 @@
 
 - **libcc 原生引擎**：C++ 编译的原生库，经 JNI 接入，性能最优。
 - **WebView JS 引擎**：WebView 内加载 JS 转换器，作为兜底覆盖所有方向。
-- **在线转换**：可选，调用 `cc.miawa.cn` 接口，失败时回退本地引擎。
+- **在线转换**：可选，调用 `api.cc.miawa.cn` 接口，失败时回退本地引擎。
 
 ---
 
