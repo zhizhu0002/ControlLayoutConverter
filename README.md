@@ -59,7 +59,7 @@ APK 输出在 `app/build/outputs/apk/`。
 
 ## 许可证
 
-[MIT](LICENSE)
+本项目基于 [MIT](LICENSE) 许可开源。第三方依赖许可证见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
 ---
 
