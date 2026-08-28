@@ -5,7 +5,7 @@
 支持三种启动器的布局格式：**FoldCraftLauncher**、**ZalithLauncher**、**ZalithLauncher2**。
 
 - **FoldCraftLauncher** — `viewGroups` 结构
-- **ZalithLauncher** — `mControlDataList` 结构
+- **ZalithLauncher** — `mControlDataList` 结构（含 Pojav 布局）
 - **ZalithLauncher2** — `layers` 结构
 
 ---
@@ -65,6 +65,10 @@ APK 输出在 `app/build/outputs/apk/`。
 
 ## 致谢
 
-- [FoldCraftLauncher](https://github.com/FoldCraftLauncher)
-- [Miuix](https://github.com/YuKongA)（Compose UI 组件库）
+- [FoldCraftLauncher](https://github.com/FCL-Team/FoldCraftLauncher)（FCL 布局）
+- [ZalithLauncher](https://github.com/ZalithLauncher/ZalithLauncher)（ZL1 布局）
+- [ZalithLauncher2](https://github.com/ZalithLauncher/ZalithLauncher2)（ZL2 布局）
+- [PojavLauncher](https://github.com/PojavLauncherTeam/PojavLauncher)（Pojav 布局）
+- [NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter)（libcc 原生引擎）
+- [miuix](https://github.com/YuKongA/miuix)（Compose UI 组件库）
 - [api.cc.miawa.cn](https://api.cc.miawa.cn)（在线转换接口）
