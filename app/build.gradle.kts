@@ -13,11 +13,11 @@ android {
         applicationId = "com.zhizhu.controlconverter"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
+        versionCode = 4
         ndk {
             abiFilters += "arm64-v8a"
         }
-        versionName = "2.0"
+        versionName = "0.3"
     }
 
     signingConfigs {
