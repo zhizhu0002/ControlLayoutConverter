@@ -246,9 +246,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun convert(text: String, input: String, output: String, name: String, useOnline: Boolean, useKotlinEngine: Boolean, done: (String) -> Unit) {
+    fun convert(text: String, input: String, output: String, name: String, useOnline: Boolean, done: (String) -> Unit) {
         CrashLogStore.setContext(this, "convert-start", input, output, text.length)
-        CrashLogStore.log(this, "convert-request", "nameLength=${name.length} online=$useOnline kotlin=$useKotlinEngine")
+        CrashLogStore.log(this, "convert-request", "nameLength=${name.length} online=$useOnline")
         if (input !in setOf("FCL", "ZL1", "ZL2")) {
             done("__ERROR__:不支持的输入格式：$input")
             return
@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         Thread {
-            runCatching { dispatchConversion(text, input, output, name, useOnline, useKotlinEngine) }
+            runCatching { dispatchConversion(text, input, output, name, useOnline) }
                 .onSuccess { rawResult ->
                     val backend = when {
                         input == "FCL" && output == "ZL2" -> "native-libcc"
@@ -284,7 +284,7 @@ class MainActivity : ComponentActivity() {
      * - ZL1 <-> ZL2：WebView JS 引擎（migrateLayout / zl2ToZl1）。
      * - FCL <-> ZL1：经 ZL2 原生中转（原生 + JS 混合链）。
      */
-    private fun dispatchConversion(text: String, input: String, output: String, name: String, useOnline: Boolean, useKotlinEngine: Boolean): String {
+    private fun dispatchConversion(text: String, input: String, output: String, name: String, useOnline: Boolean): String {
         // 在线转换优先（仅 FCL↔ZL2，且用户开启在线），失败回退本地引擎
         if (useOnline && input == "FCL" && output == "ZL2") {
             try {
@@ -305,36 +305,22 @@ class MainActivity : ComponentActivity() {
         if (input == "FCL" && output == "ZL2") {
             // 前置校验：确认输入确实是 FCL 布局，避免 libcc 原生宽松解析把别的内容"侥幸"转换成功
             require(Regex("\"viewGroups\"").containsMatchIn(text)) { "不是有效的 FCL 控件布局（缺少 viewGroups）" }
-            // 引擎优先级：libcc 原生 → Kotlin 引擎 → WebView
+            // 引擎优先级：libcc 原生 → WebView
             try {
                 return OfficialConverter.convertFclToZl2(this, text)
             } catch (nativeError: Exception) {
-                CrashLogStore.log(this, "native-fallback-kotlin", "reason=${nativeError.message ?: "unknown"}")
-            }
-            if (useKotlinEngine) {
-                try {
-                    return KotlinConverter.fclToZl2(text)
-                } catch (kotlinError: Exception) {
-                    CrashLogStore.log(this, "kotlin-fallback-web", "reason=${kotlinError.message ?: "unknown"}")
-                }
+                CrashLogStore.log(this, "native-fallback-web", "reason=${nativeError.message ?: "unknown"}")
             }
             return convertViaWebBlocking(text, input, output, name)
         }
         if (input == "ZL2" && output == "FCL") {
             // 前置校验：确认输入确实是 ZL2 布局
             require(Regex("\"layers\"").containsMatchIn(text)) { "不是有效的 ZL2 控件布局（缺少 layers）" }
-            // 引擎优先级：libcc 原生 → Kotlin 引擎 → WebView
+            // 引擎优先级：libcc 原生 → WebView
             try {
                 return OfficialConverter.convertZl2ToFcl(this, text)
             } catch (nativeError: Exception) {
-                CrashLogStore.log(this, "native-zl2fcl-fallback-kotlin", "reason=${nativeError.message ?: "unknown"}")
-            }
-            if (useKotlinEngine) {
-                try {
-                    return KotlinConverter.zl2ToFcl(text)
-                } catch (kotlinError: Exception) {
-                    CrashLogStore.log(this, "kotlin-zl2fcl-fallback-web", "reason=${kotlinError.message ?: "unknown"}")
-                }
+                CrashLogStore.log(this, "native-zl2fcl-fallback-web", "reason=${nativeError.message ?: "unknown"}")
             }
             return convertViaWebBlocking(text, input, output, name)
         }
@@ -456,9 +442,6 @@ private fun ConverterApp() {
     var busy by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var online by rememberSaveable { mutableStateOf(true) }
-    var useKotlinEngine by rememberSaveable {
-        mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("use-kotlin-engine", true))
-    }
     var inputTab by rememberSaveable { mutableStateOf("粘贴") }
     var crashLog by remember { mutableStateOf(CrashLogStore.read(activity)) }
     var runtimeLog by remember { mutableStateOf(CrashLogStore.readRuntime(activity)) }
@@ -624,39 +607,6 @@ private fun ConverterApp() {
 
                             Spacer(Modifier.height(10.dp))
 
-                            // Kotlin 转换引擎开关（作为 libcc 之后的备选引擎）
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        "Kotlin 转换引擎",
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = layoutColors().text
-                                    )
-                                    Text(
-                                        "作为 libcc 之后的备选引擎，可离线、不依赖 WebView",
-                                        style = MiuixTheme.textStyles.footnote2,
-                                        color = layoutColors().textSecondary,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-                                Switch(
-                                    checked = useKotlinEngine,
-                                    onCheckedChange = {
-                                        useKotlinEngine = it
-                                        activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
-                                            .edit().putBoolean("use-kotlin-engine", it).apply()
-                                    }
-                                )
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-
                             // 自动识别说明（仅输入格式为「自动」时显示，带展开/收起过渡动画）
                             AnimatedVisibility(
                                 visible = input == "自动",
@@ -760,7 +710,7 @@ private fun ConverterApp() {
                             result = ""
                             showResult = false
                             resultExpanded = false
-                            activity.convert(source, actual, output, name, online, useKotlinEngine) { r ->
+                            activity.convert(source, actual, output, name, online) { r ->
                                 busy = false
                                 if (r == "__ERROR__:__INVALID_JSON__") {
                                     result = ""
