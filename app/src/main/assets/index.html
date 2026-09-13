@@ -474,10 +474,10 @@
     var rtMeta=src&&src._control_converter;
     if(rtMeta&&rtMeta.source==='ZL2-roundtrip'&&Array.isArray(rtMeta.layersSnapshot)){
       return stripForeignMeta({
-        info:(rtMeta.infoSnapshot?JSON.parse(JSON.stringify(rtMeta.infoSnapshot)):{name:{default:baseName||'控制布局',matchQueue:[]},author:{default:'',matchQueue:[]},description:{default:'',matchQueue:[]},versionCode:0,versionName:'1.0'}),
-        layers:JSON.parse(JSON.stringify(rtMeta.layersSnapshot)),
-        styles:(rtMeta.styles&&rtMeta.styles.length?JSON.parse(JSON.stringify(rtMeta.styles)):[]),
-        joystickStyles:(rtMeta.joystickStyles?JSON.parse(JSON.stringify(rtMeta.joystickStyles)):[]),
+        info:(rtMeta.infoSnapshot?clone(rtMeta.infoSnapshot):{name:{default:baseName||'控制布局',matchQueue:[]},author:{default:'',matchQueue:[]},description:{default:'',matchQueue:[]},versionCode:0,versionName:'1.0'}),
+        layers:clone(rtMeta.layersSnapshot),
+        styles:(rtMeta.styles&&rtMeta.styles.length?clone(rtMeta.styles):[]),
+        joystickStyles:(rtMeta.joystickStyles?clone(rtMeta.joystickStyles):[]),
         editorVersion:10
       });
     }
@@ -516,7 +516,7 @@
           animateSwap: true,
           commonStyle: false,
           lightStyle: cfg,
-          darkStyle: JSON.parse(JSON.stringify(cfg))
+          darkStyle: clone(cfg)
         };
         styleIndex[key] = style.uuid;
         styles.push(style);
@@ -672,7 +672,7 @@
         normalButtons: btns,
         textBoxes: [],
         joystickButtons: [],
-        _control_converter_layer: {source:'ZL1',kind:'drawer',properties:JSON.parse(JSON.stringify(p)),orientation:String(dr.orientation||'FREE')}
+        _control_converter_layer: {source:'ZL1',kind:'drawer',properties:clone(p),orientation:String(dr.orientation||'FREE')}
       });
       // 主界面的抽屉把手 -> 打开抽屉
       mainLayer.normalButtons.push(buildButton(p, undefined, [{ type: "switch_layer", key: duid }]));
@@ -826,12 +826,20 @@
       baseInfo={visibilityType:zl2Visibility(joystick.visibilityType||layer.visibilityType),xPosition:Math.max(0,Math.min(1000,Math.round((Number(p.x)||0)/10))),yPosition:Math.max(0,Math.min(1000,Math.round((Number(p.y)||0)/10))),sizeType:'PERCENTAGE',absoluteWidth:Math.max(5,Math.round(q(joystick.sizeDp,50))),absoluteHeight:Math.max(5,Math.round(q(joystick.sizeDp,50))),percentageWidth:{reference:'SCREEN_HEIGHT',size:pct},percentageHeight:{reference:'SCREEN_HEIGHT',size:pct}};
     }
     var dir={id:joystick.uuid||uid(18),baseInfo:baseInfo,event:{upKeycode:dirCode('north'),downKeycode:dirCode('south'),leftKeycode:dirCode('west'),rightKeycode:dirCode('east')},style:rockerStyleName};
-    dir._control_converter={source:'ZL2',joystickUuid:joystick.uuid||'',joystickStyleId:joystick.joystickStyleId||'',joystickStyle:(joystick.joystickStyleId&&srcJoyStyleById[joystick.joystickStyleId])?JSON.parse(JSON.stringify(srcJoyStyleById[joystick.joystickStyleId])):null,sizeType:sizeType,sizeDp:joystick.sizeDp,sizePercentage:joystick.sizePercentage,x:(Number(p.x)||0),y:(Number(p.y)||0),directionEvents:joystick.directionEvents,visibilityType:joystick.visibilityType||layer.visibilityType};
+    dir._control_converter={source:'ZL2',joystickUuid:joystick.uuid||'',joystickStyleId:joystick.joystickStyleId||'',joystickStyle:(joystick.joystickStyleId&&srcJoyStyleById[joystick.joystickStyleId])?clone(srcJoyStyleById[joystick.joystickStyleId]):null,sizeType:sizeType,sizeDp:joystick.sizeDp,sizePercentage:joystick.sizePercentage,x:(Number(p.x)||0),y:(Number(p.y)||0),directionEvents:joystick.directionEvents,visibilityType:joystick.visibilityType||layer.visibilityType};
     return dir;
   }
   function makeFclEvent() { return {autoKeep:false,autoClick:false,openMenu:false,switchTouchMode:false,switchMouseMode:false,input:false,quickInput:false,outputText:'',outputKeycodes:[],bindViewGroup:[]}; }
   function zl2EventsToFcl(events, groupIds) { var out=makeFclEvent(); (events||[]).forEach(function(e){ if(e.type==='key'){var k=fclKeyFromGlfw(e.key);if(k!=null)out.outputKeycodes.push(k);}else{var sk=specialKey(e);if(sk!=null)out.outputKeycodes.push(sk);else if(e.type==='switch_layer'&&groupIds[e.key])out.bindViewGroup.push(groupIds[e.key]);} }); return out; }
   function fclEventsToZl2(event, groupMap) { var out=[], p=event&&event.pressEvent||{}; if(p.input) out.push({type:'launcher_event',key:'launcher.event.switch_ime'}); if(p.openMenu) out.push({type:'launcher_event',key:'launcher.event.switch_menu'}); (p.outputKeycodes||[]).forEach(function(k){k=Number(k);if(!k||k===-2||k===-5)return;if(k>0){var name=glfwFromFclKey(k);if(name)out.push({type:'key',key:name});}else{var map={'-1':'launcher.event.switch_ime','-3':'GLFW_MOUSE_BUTTON_LEFT','-4':'GLFW_MOUSE_BUTTON_RIGHT','-6':'GLFW_MOUSE_BUTTON_MIDDLE','-7':'launcher.event.scroll_up.single','-8':'launcher.event.scroll_down.single','-9':'launcher.event.switch_menu'};if(map[String(k)])out.push({type:'launcher_event',key:map[String(k)]});}}); (p.bindViewGroup||[]).forEach(function(id){if(groupMap[id])out.push({type:'switch_layer',key:groupMap[id]});}); return out; }
+  // 深拷贝：优先 structuredClone（不materialize 字符串，对整棵 layers 快照远快于 JSON 往返）；
+  // 老版本 WebView 不支持时回退到 JSON 往返，语义对本引擎的纯 JSON 数据等价。
+  function clone(value) {
+    if (value === null || typeof value !== 'object') return value;
+    try { if (typeof structuredClone === 'function') return structuredClone(value); } catch (ignore) {}
+    // 回退：老版本 WebView 无 structuredClone 时走 JSON 往返（注意此处不可再调用 clone，否则无限递归）
+    return JSON.parse(JSON.stringify(value));
+  }
   function stripForeignMeta(value) {
     if (Array.isArray(value)) { value.forEach(stripForeignMeta); return value; }
     if (!value || typeof value !== 'object') return value;
@@ -843,8 +851,18 @@
     return value;
   }
   function directionKeycodes(direction) {
-    var e=direction&&direction.event||{}, out={up:e.upKeycode||87,down:e.downKeycode||83,left:e.leftKeycode||65,right:e.rightKeycode||68};
-    return out;
+    var e=direction&&direction.event||{};
+    function list(value, fallback) {
+      var values=Array.isArray(value)?value:[value];
+      values=values.map(function(k){return Number(k)||0;}).filter(function(k){return k!==0;});
+      return values.length?values:[fallback];
+    }
+    return {
+      up:list(e.upKeycode,17),
+      down:list(e.downKeycode,31),
+      left:list(e.leftKeycode,30),
+      right:list(e.rightKeycode,32)
+    };
   }
   function fclDirectionToZlButtons(direction, group, styleId) {
     var bi=direction.baseInfo||{}, x=fclPercent(bi.xPosition), y=fclPercent(bi.yPosition),
@@ -852,7 +870,9 @@
         keys=directionKeycodes(direction), names=[['◤',[keys.up,keys.left]],['▲',[keys.up]],['◥',[keys.up,keys.right]],['◀',[keys.left]],['▶',[keys.right]],['◣',[keys.down,keys.left]],['▼',[keys.down]],['◢',[keys.down,keys.right]]];
     return names.map(function(entry,i){
       var row=Math.floor(i/3), col=i%3, ev=[];
-      entry[1].forEach(function(k){var glfw=glfwFromFclKey(k);if(glfw)ev.push({type:'key',key:glfw});});
+      entry[1].forEach(function(keys){
+        (Array.isArray(keys)?keys:[keys]).forEach(function(k){var glfw=glfwFromFclKey(Number(k));if(glfw)ev.push({type:'key',key:glfw});});
+      });
       return {text:{default:entry[0],matchQueue:[]},uuid:uid(18),position:{x:Math.max(0,Math.min(10000,x+(col-1)*size)),y:Math.max(0,Math.min(10000,y+(row-1)*size))},buttonSize:{type:'percentage',widthDp:50,heightDp:50,widthPercentage:size,heightPercentage:size,widthReference:'screen_width',heightReference:'screen_width'},buttonStyle:styleId,textAlignment:'Center',visibilityType:fclVisibility(bi.visibilityType||group.visibility),clickEvents:ev,isSwipple:true,isPenetrable:false,isToggleable:false,_control_converter:{source:'FCL',directionId:direction.id||'',synthetic:true,keycodes:entry[1].slice(0,4)}};
     });
   }
@@ -873,7 +893,7 @@
     (directionStyles||[]).forEach(function(ds){
       var r=(ds&&ds.rockerStyle)||{}, name=unique('ZL 摇杆 '+(ds.name||'Default'));
       var c={alpha:1,backgroundColor:fclColorToZl2(r.bgFillColor!=null?r.bgFillColor:0x80000000,0),joystickColor:fclColorToZl2(r.rockerFillColor!=null?r.rockerFillColor:0x80FFFFFF,-7829368),joystickCanLockColor:fclColorToZl2(0x80FFFF00,0),joystickLockedColor:fclColorToZl2(0x8000FF00,0),lockMarkColor:fclColorToZl2(0xFFFFFFFF,0),borderWidthRatio:Math.max(0,Math.min(50,Math.round(Number(r.bgStrokeWidth)||0)/10)),borderColor:fclColorToZl2(r.bgStrokeColor!=null?r.bgStrokeColor:0xFFFFFFFF,0),backgroundShape:Math.max(0,Math.min(50,Math.round(Number(r.bgCornerRadius)||500)/10)),joystickShape:Math.max(0,Math.min(50,Math.round(Number(r.rockerCornerRadius)||500)/10)),joystickSize:Math.max(0,Math.min(1,Number(r.rockerSize)||500)/1000)};
-      var sid=uid(12); styles.push({name:name,uuid:sid,commonStyle:true,lightStyle:c,darkStyle:JSON.parse(JSON.stringify(c))}); nameBy[ds.name]=sid;
+      var sid=uid(12); styles.push({name:name,uuid:sid,commonStyle:true,lightStyle:c,darkStyle:clone(c)}); nameBy[ds.name]=sid;
     });
     return {styles:styles,nameBy:nameBy};
   }
@@ -909,17 +929,50 @@
   function fclToZl2(src) {
     if (!src || !Array.isArray(src.viewGroups)) throw new Error('不是有效的 FCL 控件布局（缺少 viewGroups）');
     var layers=[], styles=[], styleMap={}, sourceStyles={}; (src.buttonStyles||[]).forEach(function(s){sourceStyles[s.name||'Default']=s;});
-    function styleFor(name) { name=name||'Default'; if(styleMap[name])return styleMap[name]; var id=uid(12), s=sourceStyles[name]||sourceStyles.Default||{}, c={alpha:1,pressedAlpha:1,backgroundColor:fclColorToZl2(s.fillColor,0),pressedBackgroundColor:fclColorToZl2(s.fillColorPressed,0),contentColor:fclColorToZl2(s.textColor,4294967295),pressedContentColor:fclColorToZl2(s.textColorPressed,4294967295),borderWidth:Number(s.strokeWidth||0)/10,pressedBorderWidth:Number(s.strokeWidthPressed||0)/10,borderColor:fclColorToZl2(s.strokeColor,0),pressedBorderColor:fclColorToZl2(s.strokeColorPressed,0),borderRadius:{topStart:Number(s.cornerRadius||0)/10,topEnd:Number(s.cornerRadius||0)/10,bottomEnd:Number(s.cornerRadius||0)/10,bottomStart:Number(s.cornerRadius||0)/10},pressedBorderRadius:{topStart:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,topEnd:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,bottomEnd:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,bottomStart:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10}}; styleMap[name]=id; styles.push({name:name,uuid:id,animateSwap:false,commonStyle:true,lightStyle:c,darkStyle:JSON.parse(JSON.stringify(c))}); return id; }
+    function styleFor(name) { name=name||'Default'; if(styleMap[name])return styleMap[name]; var id=uid(12), s=sourceStyles[name]||sourceStyles.Default||{}, c={alpha:1,pressedAlpha:1,backgroundColor:fclColorToZl2(s.fillColor,0),pressedBackgroundColor:fclColorToZl2(s.fillColorPressed,0),contentColor:fclColorToZl2(s.textColor,4294967295),pressedContentColor:fclColorToZl2(s.textColorPressed,4294967295),borderWidth:Number(s.strokeWidth||0)/10,pressedBorderWidth:Number(s.strokeWidthPressed||0)/10,borderColor:fclColorToZl2(s.strokeColor,0),pressedBorderColor:fclColorToZl2(s.strokeColorPressed,0),borderRadius:{topStart:Number(s.cornerRadius||0)/10,topEnd:Number(s.cornerRadius||0)/10,bottomEnd:Number(s.cornerRadius||0)/10,bottomStart:Number(s.cornerRadius||0)/10},pressedBorderRadius:{topStart:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,topEnd:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,bottomEnd:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10,bottomStart:Number(s.cornerRadiusPressed==null?s.cornerRadius:s.cornerRadiusPressed||0)/10}}; styleMap[name]=id; styles.push({name:name,uuid:id,animateSwap:false,commonStyle:true,lightStyle:c,darkStyle:clone(c)}); return id; }
     var groupIds={}; (src.viewGroups||[]).forEach(function(g){groupIds[g.id]=uid(12);});
     // FCL directionStyles -> ZL joystickStyles，并建立 FCL directionStyle名 -> ZL joystickStyle uuid 映射
-    var dir=src.directionStyles||[], jConv=fclDirectionStylesToZlJoystickStyles(dir,src.joystickStyles,{}), joystickStyles=jConv.styles.slice(), joystickStyleByDirName=jConv.nameBy;
+    var dir=src.directionStyles||[], directionStyleByName={}; dir.forEach(function(ds){if(ds&&ds.name)directionStyleByName[String(ds.name)]=ds;}); var jConv=fclDirectionStylesToZlJoystickStyles(dir,src.joystickStyles,{}), joystickStyles=jConv.styles.slice(), joystickStyleByDirName=jConv.nameBy;
+    function directionButtonStyleId(direction, directionStyle) {
+      var source = directionStyle && directionStyle.buttonStyle || sourceStyles.Default || {};
+      var styleName = 'FCL direction ' + String(direction.style || 'Default');
+      if(styleMap[styleName]) return styleMap[styleName];
+      var id = uid(12), c = {
+        alpha: 1, pressedAlpha: 1,
+        backgroundColor: fclColorToZl2(source.fillColor, 0),
+        pressedBackgroundColor: fclColorToZl2(source.fillColorPressed, 0),
+        contentColor: fclColorToZl2(source.textColor, 4294967295),
+        pressedContentColor: fclColorToZl2(source.textColorPressed, 4294967295),
+        borderWidth: Number(source.strokeWidth || 0) / 10,
+        pressedBorderWidth: Number(source.strokeWidthPressed || 0) / 10,
+        borderColor: fclColorToZl2(source.strokeColor, 0),
+        pressedBorderColor: fclColorToZl2(source.strokeColorPressed, 0),
+        borderRadius: {topStart:Number(source.cornerRadius || 0)/10, topEnd:Number(source.cornerRadius || 0)/10, bottomEnd:Number(source.cornerRadius || 0)/10, bottomStart:Number(source.cornerRadius || 0)/10},
+        pressedBorderRadius: {topStart:Number(source.cornerRadiusPressed == null ? source.cornerRadius : source.cornerRadiusPressed || 0)/10, topEnd:Number(source.cornerRadiusPressed == null ? source.cornerRadius : source.cornerRadiusPressed || 0)/10, bottomEnd:Number(source.cornerRadiusPressed == null ? source.cornerRadius : source.cornerRadiusPressed || 0)/10, bottomStart:Number(source.cornerRadiusPressed == null ? source.cornerRadius : source.cornerRadiusPressed || 0)/10}
+      };
+      styleMap[styleName] = id;
+      styles.push({name:styleName, uuid:id, animateSwap:false, commonStyle:true, lightStyle:c, darkStyle:clone(c)});
+      return id;
+    }
     // 默认摇杆样式兜底
-    if(!joystickStyles.length){ var dsid=uid(12), dc={alpha:1,backgroundColor:fclColorToZl2(0x80000000,0),joystickColor:fclColorToZl2(0x80FFFFFF,-7829368),joystickCanLockColor:fclColorToZl2(0x80FFFF00,0),joystickLockedColor:fclColorToZl2(0x8000FF00,0),lockMarkColor:fclColorToZl2(0xFFFFFFFF,0),borderWidthRatio:0,borderColor:fclColorToZl2(0xFFFFFFFF,0),backgroundShape:50,joystickShape:50,joystickSize:0.5}; joystickStyles.push({name:'JOY',uuid:dsid,commonStyle:true,lightStyle:dc,darkStyle:JSON.parse(JSON.stringify(dc))}); joystickStyleByDirName['__default__']=dsid; }
+    if(!joystickStyles.length){ var dsid=uid(12), dc={alpha:1,backgroundColor:fclColorToZl2(0x80000000,0),joystickColor:fclColorToZl2(0x80FFFFFF,-7829368),joystickCanLockColor:fclColorToZl2(0x80FFFF00,0),joystickLockedColor:fclColorToZl2(0x8000FF00,0),lockMarkColor:fclColorToZl2(0xFFFFFFFF,0),borderWidthRatio:0,borderColor:fclColorToZl2(0xFFFFFFFF,0),backgroundShape:50,joystickShape:50,joystickSize:0.5}; joystickStyles.push({name:'JOY',uuid:dsid,commonStyle:true,lightStyle:dc,darkStyle:clone(dc)}); joystickStyleByDirName['__default__']=dsid; }
     // 收集 direction 引用的原始 ZL joystickStyle（`_control_converter.joystickStyle`/`joystickStyleId`），复用并保留到输出
     var srcJoyById={}; (src.joystickStyles||[]).forEach(function(s){ if(s&&s.uuid)srcJoyById[s.uuid]=s; });
     var outJoyIds={}; joystickStyles.forEach(function(s){if(s&&s.uuid)outJoyIds[s.uuid]=true;});
-    (src.viewGroups||[]).forEach(function(g){ (g.viewData.directionList||[]).forEach(function(d){ var mc=d&&d._control_converter; if(!mc)return; var st=mc.joystickStyle||srcJoyById[mc.joystickStyleId]; if(st&&st.uuid&&!outJoyIds[st.uuid]){ joystickStyles.push(JSON.parse(JSON.stringify(st))); outJoyIds[st.uuid]=true; } }); });
-    (src.viewGroups||[]).forEach(function(g){ var layer={name:g.name||'Default',uuid:groupIds[g.id]||uid(12),hide:String(g.visibility||'').toUpperCase()==='INVISIBLE',visibilityType:fclVisibility(g.visibility),normalButtons:[],textBoxes:[],joystickButtons:[]}; if(g._control_converter_layer)layer._control_converter_layer=g._control_converter_layer; var vd=g.viewData||{}; (vd.buttonList||[]).forEach(function(b){var bi=b.baseInfo||{}, w=Number(bi.absoluteWidth)||80,h=Number(bi.absoluteHeight)||30, ev=fclEventsToZl2(b.event,groupIds), btn={text:{default:textValue(b.text),matchQueue:[]},uuid:b.id||uid(18),position:{x:fclPercent(bi.xPosition),y:fclPercent(bi.yPosition)},buttonSize:{type:String(bi.sizeType||'PERCENTAGE').toUpperCase()==='ABSOLUTE'?'dp':'percentage',widthDp:w,heightDp:h,widthPercentage:Math.round(Number((bi.percentageWidth||{}).size)||100)*10,heightPercentage:Math.round(Number((bi.percentageHeight||{}).size)||100)*10,widthReference:String((bi.percentageWidth||{}).reference||'SCREEN_HEIGHT').toLowerCase(),heightReference:String((bi.percentageHeight||{}).reference||'SCREEN_HEIGHT').toLowerCase()},buttonStyle:styleFor(b.style),textAlignment:'Center',visibilityType:fclVisibility(bi.visibilityType||g.visibility),isSwipple:!!(b.event&&b.event.pointerFollow),isPenetrable:false,isToggleable:false}; if(b._control_converter)btn._control_converter=b._control_converter; if(ev.length)btn.clickEvents=ev; layer.normalButtons.push(btn);}); (vd.directionList||[]).forEach(function(d){ layer.joystickButtons.push(fclDirectionToZlJoystick(d,g,joystickStyleByDirName)); }); layers.push(layer); });
+    (src.viewGroups||[]).forEach(function(g){ (g.viewData.directionList||[]).forEach(function(d){ var mc=d&&d._control_converter; if(!mc)return; var st=mc.joystickStyle||srcJoyById[mc.joystickStyleId]; if(st&&st.uuid&&!outJoyIds[st.uuid]){ joystickStyles.push(clone(st)); outJoyIds[st.uuid]=true; } }); });
+    (src.viewGroups||[]).forEach(function(g){ var layer={name:g.name||'Default',uuid:groupIds[g.id]||uid(12),hide:String(g.visibility||'').toUpperCase()==='INVISIBLE',visibilityType:fclVisibility(g.visibility),normalButtons:[],textBoxes:[],joystickButtons:[]}; if(g._control_converter_layer)layer._control_converter_layer=g._control_converter_layer; var vd=g.viewData||{}; (vd.buttonList||[]).forEach(function(b){var bi=b.baseInfo||{}, w=Number(bi.absoluteWidth)||80,h=Number(bi.absoluteHeight)||30, ev=fclEventsToZl2(b.event,groupIds), btn={text:{default:textValue(b.text),matchQueue:[]},uuid:b.id||uid(18),position:{x:fclPercent(bi.xPosition),y:fclPercent(bi.yPosition)},buttonSize:{type:String(bi.sizeType||'PERCENTAGE').toUpperCase()==='ABSOLUTE'?'dp':'percentage',widthDp:w,heightDp:h,widthPercentage:Math.round(Number((bi.percentageWidth||{}).size)||100)*10,heightPercentage:Math.round(Number((bi.percentageHeight||{}).size)||100)*10,widthReference:String((bi.percentageWidth||{}).reference||'SCREEN_HEIGHT').toLowerCase(),heightReference:String((bi.percentageHeight||{}).reference||'SCREEN_HEIGHT').toLowerCase()},buttonStyle:styleFor(b.style),textAlignment:'Center',visibilityType:fclVisibility(bi.visibilityType||g.visibility),isSwipple:!!(b.event&&b.event.pointerFollow),isPenetrable:false,isToggleable:false}; if(b._control_converter)btn._control_converter=b._control_converter; if(ev.length)btn.clickEvents=ev; layer.normalButtons.push(btn);});     function fclDirectionStyleType(direction) {
+      var style=directionStyleByName[String(direction&&direction.style||'')];
+      return String(style&&style.styleType||'ROCKER').toUpperCase();
+    }
+    function appendDirectionToLayer(layer, direction, group) {
+      var directionStyle=directionStyleByName[String(direction.style||'')];
+      if(fclDirectionStyleType(direction)==='BUTTON') {
+        layer.normalButtons.push.apply(layer.normalButtons,fclDirectionToZlButtons(direction,group,directionButtonStyleId(direction,directionStyle)));
+      } else {
+        layer.joystickButtons.push(fclDirectionToZlJoystick(direction,group,joystickStyleByDirName));
+      }
+    }
+    (vd.directionList||[]).forEach(function(d){ appendDirectionToLayer(layer,d,g); }); layers.push(layer); });
     return stripForeignMeta({_control_converter:src._control_converter||null,info:{name:{default:textValue(src.name)||'FCL 控件布局',matchQueue:[]},author:{default:textValue(src.author),matchQueue:[]},description:{default:textValue(src.description),matchQueue:[]},versionCode:Number(src.versionCode)||0,versionName:String(src.version||'1.0')},layers:layers,styles:styles,joystickStyles:joystickStyles,editorVersion:10});
   }
   function zl2ToFcl(src) {
@@ -1045,13 +1098,13 @@
             var target=layerByUuid[handleKey];
             var tMeta=target._control_converter_layer||null;
             var handleProps=null;
-            if(tMeta&&tMeta.kind==='drawer'&&tMeta.properties) handleProps=JSON.parse(JSON.stringify(tMeta.properties));
-            else if(tMeta&&tMeta.kind==='layer'&&tMeta.properties) handleProps=JSON.parse(JSON.stringify(tMeta.properties));
+            if(tMeta&&tMeta.kind==='drawer'&&tMeta.properties) handleProps=clone(tMeta.properties);
+            else if(tMeta&&tMeta.kind==='layer'&&tMeta.properties) handleProps=clone(tMeta.properties);
             else handleProps={name:String(target.name||'抽屉'),displayInGame:target.visibilityType!=='in_menu',displayInMenu:target.visibilityType!=='in_game',bgColor:2150770688,strokeColor:-1,strokeWidth:0,cornerRadius:10};
             handleProps.name=textValue(b.text)||handleProps.name||String(target.name||'抽屉');
             var drawerButtons=(target.normalButtons||[]).map(function(tb){return control(tb,tb.visibilityType||target.visibilityType);});
             drawers.push({buttonProperties:drawerButtons,orientation:(tMeta&&tMeta.orientation)||'FREE',properties:handleProps,
-              _control_converter_layer:{kind:'drawer',source:'ZL2-reconstructed',uuid:target.uuid,name:String(target.name||''),hide:!!target.hide,visibilityType:String(target.visibilityType||'always'),properties:JSON.parse(JSON.stringify(handleProps))}});
+              _control_converter_layer:{kind:'drawer',source:'ZL2-reconstructed',uuid:target.uuid,name:String(target.name||''),hide:!!target.hide,visibilityType:String(target.visibilityType||'always'),properties:clone(handleProps)}});
             handledDrawerUuids[target.uuid]=true;
           } else {
             controls.push(control(b,'always'));
@@ -1059,10 +1112,10 @@
         });
       } else if(layerMeta&&layerMeta.kind==='drawer'){
         // 未被主层把手引用的抽屉层：仍作为抽屉导出，把手属性用层自身 properties
-        var drawerProp2=layerMeta.properties?JSON.parse(JSON.stringify(layerMeta.properties)):null;
+        var drawerProp2=layerMeta.properties?clone(layerMeta.properties):null;
         if(drawerProp2) drawerProp2.name=drawerProp2.name||String(l.name||'抽屉');
         var dreBtn=(l.normalButtons||[]).map(function(b){return control(b,b.visibilityType||l.visibilityType);});
-        if(drawerProp2) drawers.push({buttonProperties:dreBtn,orientation:layerMeta.orientation||'FREE',properties:drawerProp2,_control_converter_layer:JSON.parse(JSON.stringify(layerMeta))});
+        if(drawerProp2) drawers.push({buttonProperties:dreBtn,orientation:layerMeta.orientation||'FREE',properties:drawerProp2,_control_converter_layer:clone(layerMeta)});
         else controls.push.apply(controls,dreBtn);
         handledDrawerUuids[l.uuid]=true;
       } else {
@@ -1072,7 +1125,7 @@
         drawers.push({buttonProperties:layerBtns,orientation:'FREE',
           properties:{name:String(l.name||'图层'),displayInGame:l.visibilityType!=='in_menu',displayInMenu:l.visibilityType!=='in_game',bgColor:2150770688,strokeColor:-1,strokeWidth:0,cornerRadius:10},
           _control_converter_layer:{kind:'layer',uuid:l.uuid,name:String(l.name||''),hide:!!l.hide,visibilityType:String(l.visibilityType||'always'),
-            widgets:{buttons:JSON.parse(JSON.stringify(l.normalButtons||[])),textBoxes:JSON.parse(JSON.stringify(l.textBoxes||[])),joysticks:JSON.parse(JSON.stringify(l.joystickButtons||[]))}}});
+            widgets:{buttons:clone(l.normalButtons||[]),textBoxes:clone(l.textBoxes||[]),joysticks:clone(l.joystickButtons||[])}}});
         handledDrawerUuids[l.uuid]=true;
       }
     });
@@ -1080,7 +1133,7 @@
       var gui=control(guiButton,'always');
       gui.keycodes=[-2,0,0,0];
       gui.name=textValue(guiButton.text)||'GUI';
-      gui._control_converter={guiLayer:{uuid:guiLayer.uuid,widget:JSON.parse(JSON.stringify(guiButton))}};
+      gui._control_converter={guiLayer:{uuid:guiLayer.uuid,widget:clone(guiButton)}};
       controls.push(gui);
     }
     Object.keys(syntheticDirections).forEach(function(key){
@@ -1099,10 +1152,10 @@
     var rt={mControlInfoDataList:{name:textValue(info.name)||baseName||'控制布局',author:textValue(info.author),desc:textValue(info.description)},mControlDataList:controls,mDrawerDataList:drawers,mJoystickDataList:joysticks,scaledAt:Math.round(restoredScale*100)/100,version:8};
     if(isZl2Src){
       rt._control_converter={version:3,source:'ZL2-roundtrip',scaledAt:Math.round(restoredScale*100)/100,mode:'constraint-first',
-        styles:JSON.parse(JSON.stringify(src.styles||[])),
-        joystickStyles:JSON.parse(JSON.stringify(src.joystickStyles||[])),
-        layersSnapshot:JSON.parse(JSON.stringify(src.layers)),
-        infoSnapshot:(src.info?JSON.parse(JSON.stringify(src.info)):null)};
+        styles:clone(src.styles||[]),
+        joystickStyles:clone(src.joystickStyles||[]),
+        layersSnapshot:clone(src.layers),
+        infoSnapshot:(src.info?clone(src.info):null)};
     }
     return rt;
   }
@@ -1130,7 +1183,7 @@
   function zl1ToFcl(src, baseName) {
     if(!src || !Array.isArray(src.mControlDataList)) throw new Error('不是有效的 ZL1 控件布局');
     var groups=[], styles=[], styleMap={}, groupIds={};
-    function addGroup(name, groupVisibility, controls, layerKind, layerProperties){var list=[], localStyles=[]; (controls||[]).forEach(function(c){var ownVisibility=visibility(c.displayInMenu,c.displayInGame), made=zl1ButtonToFcl(c,ownVisibility);list.push(made.button);if(!styleMap[made.style.name]){styleMap[made.style.name]=true;localStyles.push(made.style);}});styles.push.apply(styles,localStyles);var group={id:uid(12),name:name||'Default',visibility:groupVisibility||'VISIBLE',viewData:{buttonList:list,directionList:[]}};group._control_converter_layer={source:'ZL1',kind:layerKind||'main',properties:layerProperties?JSON.parse(JSON.stringify(layerProperties)):null,orientation:'FREE'};groups.push(group);groupIds[group.id]=group;return group;}
+    function addGroup(name, groupVisibility, controls, layerKind, layerProperties){var list=[], localStyles=[]; (controls||[]).forEach(function(c){var ownVisibility=visibility(c.displayInMenu,c.displayInGame), made=zl1ButtonToFcl(c,ownVisibility);list.push(made.button);if(!styleMap[made.style.name]){styleMap[made.style.name]=true;localStyles.push(made.style);}});styles.push.apply(styles,localStyles);var group={id:uid(12),name:name||'Default',visibility:groupVisibility||'VISIBLE',viewData:{buttonList:list,directionList:[]}};group._control_converter_layer={source:'ZL1',kind:layerKind||'main',properties:layerProperties?clone(layerProperties):null,orientation:'FREE'};groups.push(group);groupIds[group.id]=group;return group;}
     var mainGroup=addGroup('游戏','VISIBLE',src.mControlDataList||[],'main',null);
     // 抽屉：组设为 INVISIBLE，并在主组生成带 bindViewGroup 的把手按钮
     (src.mDrawerDataList||[]).forEach(function(d){

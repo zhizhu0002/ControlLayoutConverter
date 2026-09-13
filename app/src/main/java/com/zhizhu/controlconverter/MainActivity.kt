@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import android.os.Bundle
+import android.content.res.Configuration
 import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
@@ -20,6 +21,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -36,53 +38,77 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import androidx.core.view.WindowInsetsControllerCompat
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationRail
+import top.yukonga.miuix.kmp.basic.NavigationRailItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
@@ -98,6 +124,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.menu.WindowDropdownMenu
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -105,7 +132,6 @@ import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import kotlin.math.max
 import kotlin.math.min
-import java.util.Base64
 import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -114,6 +140,9 @@ import android.content.Intent
 import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val Accent = Color(0xFF2E7CF6)
 private val Success = Color(0xFF35B779)
@@ -132,6 +161,63 @@ private data class AppColors(
     val textSecondary: Color,
     val slot: Color,
 )
+
+// ===== 深浅色模式 =====
+private const val THEME_AUTO = "自动"
+private const val THEME_LIGHT = "浅色"
+private const val THEME_DARK = "深色"
+private val THEME_MODES = listOf(THEME_AUTO, THEME_LIGHT, THEME_DARK)
+
+/** 深浅色模式持久化：只在切换时写入一次，启动时读一次。 */
+private object ThemePrefs {
+    private const val PREFS = "theme"
+    private const val KEY = "mode"
+
+    fun read(context: Context): String {
+        val saved = runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, THEME_AUTO)
+        }.getOrNull()
+        return if (saved in THEME_MODES) saved!! else THEME_AUTO
+    }
+
+    fun write(context: Context, mode: String) {
+        runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, mode).apply()
+        }
+    }
+}
+
+/**
+ * 主题切换过渡：整屏叠一层「上一个主题的底色」并淡出。
+ *
+ * 之前是对 9 个颜色逐个做逐帧动画，并且用动画中的颜色重建 ThemeController，
+ * 于是动画的每一帧都要重建 Miuix 整套配色并重组整棵内容树（含 156KB 的输入框），切换明显卡顿。
+ * 现在颜色只在主题切换时重建一次，过渡只作用在叠加层的绘制上：动画帧不触发任何重组。
+ */
+@Composable
+private fun BoxScope.ThemeTransitionOverlay(isDark: Boolean, backgroundColor: Color) {
+    val alpha = remember { Animatable(0f) }
+    var overlayColor by remember { mutableStateOf(backgroundColor) }
+    var lastBackground by remember { mutableStateOf(backgroundColor) }
+    LaunchedEffect(isDark) {
+        val from = lastBackground
+        lastBackground = backgroundColor
+        // 首次组合不播过渡（from 与目标相同）
+        if (from == backgroundColor) return@LaunchedEffect
+        overlayColor = from
+        alpha.snapTo(0.92f)
+        alpha.animateTo(0f, tween(durationMillis = 300, easing = FastOutSlowInEasing))
+    }
+    Box(
+        Modifier
+            .matchParentSize()
+            // 只读取动画值用于绘制：每帧仅重绘，不重组
+            .drawBehind {
+                val a = alpha.value
+                if (a > 0.001f) drawRect(overlayColor.copy(alpha = a))
+            }
+    )
+}
 
 private val DarkAppColors = AppColors(
     bg = Color(0xFF000000),
@@ -163,8 +249,14 @@ private val LocalLayoutColors = staticCompositionLocalOf { DarkAppColors }
 private fun layoutColors(): AppColors = LocalLayoutColors.current
 
 class MainActivity : ComponentActivity() {
-    private var engine: WebView? = null
+    @Volatile private var engine: WebView? = null
+    /** WebView 引擎就绪闩锁：引擎改为首帧后创建，转换前在后台线程等待它就绪（不阻塞 UI 线程）。 */
+    private val engineReady = java.util.concurrent.CountDownLatch(1)
+    /** 本次待转换输入：由 JS 通过 Bridge.takePayload() 取回，避免把 Base64 拼进 evaluateJavascript 源码。 */
+    @Volatile private var pendingPayload: String? = null
     private var callback: ((String) -> Unit)? = null
+    /** 进程启动时刻，用于日志里量化各阶段耗时。 */
+    private val bootAtMs = SystemClock.elapsedRealtime()
     /** WebView 引擎不可用时（如沙箱环境数据目录被占用），转换降级为仅原生引擎。 */
     var webViewEngineAvailable = true
         private set
@@ -184,30 +276,10 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         CrashLogStore.log(this, "app-start")
-        // WebView 转换引擎：创建失败（沙箱环境数据目录冲突等）时降级为仅原生引擎，
-        // 保证 UI 与原生转换（FCL↔ZL2）始终可用，绝不因 WebView 初始化崩溃整个启动。
-        engine = try {
-            WebView(this).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = false
-                addJavascriptInterface(Bridge(), "NativeConverter")
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String) {
-                        CrashLogStore.log(this@MainActivity, "webview-ready")
-                        val metrics = resources.displayMetrics
-                        val rawWidth = max(window.decorView.width, metrics.widthPixels)
-                        val rawHeight = max(window.decorView.height, metrics.heightPixels)
-                        view.evaluateJavascript("globalThis.setRuntimeDisplay(${max(rawWidth, rawHeight)},${min(rawWidth, rawHeight)},${metrics.density})", null)
-                    }
-                }
-                loadUrl("file:///android_asset/index.html")
-            }
-        } catch (webViewError: Throwable) {
-            webViewEngineAvailable = false
-            CrashLogStore.log(this, "webview-init-failed", "降级为仅原生引擎：${webViewError.message ?: webViewError::class.java.simpleName}")
-            null
-        }
         setContent { ConverterApp() }
+        // WebView 转换引擎改为「首帧之后」再创建：WebView 构造 + 加载 99KB 的 index.html 都相当重，
+        // 原先放在 setContent 之前会直接阻塞首帧。post 的回调在本帧遍历结束后执行，早于任何用户点击。
+        window.decorView.post { initWebEngine() }
         // 启动看门狗：10 秒内未崩溃（首帧渲染稳定）则解除崩溃哨兵；
         // 之后的转换错误走正常错误处理，不触发玻璃降级。
         window.decorView.postDelayed({
@@ -218,13 +290,57 @@ class MainActivity : ComponentActivity() {
         }, 10_000L)
     }
 
+    /**
+     * 创建 WebView 转换引擎。失败（沙箱环境数据目录冲突等）时降级为仅原生引擎，
+     * 保证 UI 与原生转换（FCL↔ZL2）始终可用，绝不因 WebView 初始化崩溃整个启动。
+     * 无论成功失败都会放行 [engineReady]，让等待中的转换得以继续或明确报错。
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun initWebEngine() {
+        CrashLogStore.log(this, "webview-init-start", "sinceBoot=${SystemClock.elapsedRealtime() - bootAtMs}ms")
+        engine = try {
+            WebView(this).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                addJavascriptInterface(Bridge(), "NativeConverter")
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String) {
+                        CrashLogStore.log(this@MainActivity, "webview-ready", "sinceBoot=${SystemClock.elapsedRealtime() - bootAtMs}ms")
+                        val metrics = resources.displayMetrics
+                        val rawWidth = max(window.decorView.width, metrics.widthPixels)
+                        val rawHeight = max(window.decorView.height, metrics.heightPixels)
+                        view.evaluateJavascript("globalThis.setRuntimeDisplay(${max(rawWidth, rawHeight)},${min(rawWidth, rawHeight)},${metrics.density})", null)
+                        engineReady.countDown()
+                    }
+                }
+                loadUrl("file:///android_asset/index.html")
+            }
+        } catch (webViewError: Throwable) {
+            webViewEngineAvailable = false
+            CrashLogStore.log(this, "webview-init-failed", "降级为仅原生引擎：${webViewError.message ?: webViewError::class.java.simpleName}")
+            null
+        }
+        if (engine == null) engineReady.countDown()
+    }
+
     inner class Bridge {
-        @JavascriptInterface fun complete(encoded: String) = runOnUiThread {
-            CrashLogStore.log(this@MainActivity, "bridge-complete", "encodedLength=${encoded.length}")
-            val decoded = runCatching { String(Base64.getDecoder().decode(encoded), Charsets.UTF_8) }
-                .getOrElse { "__ERROR__:转换结果编码无效：${it.message ?: "未知错误"}" }
-            CrashLogStore.setContext(this@MainActivity, "convert-complete", resultLength = decoded.length)
-            callback?.invoke(decoded)
+        /**
+         * 由 JS 取回本次待转换的输入文本。
+         *
+         * 原先输入是以 Base64 形式拼进 evaluateJavascript 的 JS 源码字面量（420KB 输入 →约 560KB 脚本），
+         * WebView 必须解析这坨超大字面量；改用桥接直接取字符串，省掉编码与解析两笔开销。
+         */
+        @JavascriptInterface fun takePayload(): String {
+            val payload = pendingPayload
+            pendingPayload = null
+            return payload ?: ""
+        }
+
+        /** 结果直接以原始字符串回传，避免 Base64 编码（JS 侧）与在 UI 线程解码（Java 侧）。 */
+        @JavascriptInterface fun complete(result: String) = runOnUiThread {
+            CrashLogStore.log(this@MainActivity, "bridge-complete", "resultLength=${result.length}")
+            CrashLogStore.setContext(this@MainActivity, "convert-complete", resultLength = result.length)
+            callback?.invoke(result)
         }
         @JavascriptInterface fun failed(payload: String) = runOnUiThread {
             CrashLogStore.log(this@MainActivity, "bridge-failed", "payloadLength=${payload.length}")
@@ -252,6 +368,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 检测输入是否含 FCL `directionStyles.styleType=BUTTON` 的方向控件（如十字键）。 */
+    private fun hasFclButtonDirections(text: String): Boolean {
+        return runCatching {
+            val root = JSONObject(text)
+            val styles = root.optJSONArray("directionStyles") ?: return@runCatching false
+            val buttonStyles = mutableSetOf<String>()
+            for (i in 0 until styles.length()) {
+                val style = styles.optJSONObject(i) ?: continue
+                if (style.optString("styleType").equals("BUTTON", ignoreCase = true)) {
+                    buttonStyles += style.optString("name")
+                }
+            }
+            val groups = root.optJSONArray("viewGroups") ?: return@runCatching false
+            for (i in 0 until groups.length()) {
+                val directions = groups.optJSONObject(i)
+                    ?.optJSONObject("viewData")?.optJSONArray("directionList") ?: continue
+                for (j in 0 until directions.length()) {
+                    if (buttonStyles.contains(directions.optJSONObject(j)?.optString("style"))) return@runCatching true
+                }
+            }
+            false
+        }.getOrDefault(false)
+    }
+
+    /**
+     * FCL 的 BUTTON 方向控件不能交给 libcc：该引擎会把它当作 ZL2 摇杆。
+     * 这类输入改走内置 JS 转换器，由 JS 拆成八个普通方向按钮。
+     */
+    private fun convertFclToZl2Offline(text: String, name: String): String {
+        return if (hasFclButtonDirections(text)) {
+            CrashLogStore.log(this, "native-skipped-button-direction", "reason=libcc maps BUTTON direction to joystick")
+            convertViaWebBlocking(text, "FCL", "ZL2", name)
+        } else {
+            try {
+                OfficialConverter.convertFclToZl2(this, text)
+            } catch (nativeError: Exception) {
+                CrashLogStore.log(this, "native-fallback-web", "reason=${nativeError.message ?: "unknown"}")
+                convertViaWebBlocking(text, "FCL", "ZL2", name)
+            }
+        }
+    }
+
     fun convert(text: String, input: String, output: String, name: String, useOnline: Boolean, done: (String) -> Unit) {
         CrashLogStore.setContext(this, "convert-start", input, output, text.length)
         CrashLogStore.log(this, "convert-request", "nameLength=${name.length} online=$useOnline")
@@ -272,10 +430,10 @@ class MainActivity : ComponentActivity() {
                         else -> "web-engine"
                     }
                     CrashLogStore.log(this, "conversion-success", "backend=$backend direction=$input-$output resultLength=${rawResult.length}")
-                    // 大 JSON 的合法性校验与压缩移到后台线程：引擎输出若带缩进，压缩后可显著减小导出体积
-                    val parsed = runCatching { JSONObject(rawResult) }
-                    val compact = parsed.map { it.toString() }.getOrDefault(rawResult)
-                    runOnUiThread { done(if (parsed.isSuccess && rawResult.isNotBlank()) compact else "__ERROR__:__INVALID_JSON__") }
+                    // 仅校验合法性，绝不重序列化：引擎输出里的 signed 64-bit 大整数（如 ZL2 颜色 -9223372036854775808）
+                    // 若经 JSONObject 重排会丢精度/改写。原样保留 rawResult 交给导出与预览。
+                    val valid = runCatching { JSONObject(rawResult) }.isSuccess && rawResult.isNotBlank()
+                    runOnUiThread { done(if (valid) rawResult else "__ERROR__:__INVALID_JSON__") }
                 }
                 .onFailure { error ->
                     CrashLogStore.log(this, "conversion-failed", "direction=$input-$output type=${error::class.java.simpleName}")
@@ -312,13 +470,8 @@ class MainActivity : ComponentActivity() {
         if (input == "FCL" && output == "ZL2") {
             // 前置校验：确认输入确实是 FCL 布局，避免 libcc 原生宽松解析把别的内容"侥幸"转换成功
             require(Regex("\"viewGroups\"").containsMatchIn(text)) { "不是有效的 FCL 控件布局（缺少 viewGroups）" }
-            // 引擎优先级：libcc 原生 → WebView
-            try {
-                return OfficialConverter.convertFclToZl2(this, text)
-            } catch (nativeError: Exception) {
-                CrashLogStore.log(this, "native-fallback-web", "reason=${nativeError.message ?: "unknown"}")
-            }
-            return convertViaWebBlocking(text, input, output, name)
+            // 引擎优先级：libcc 原生（BUTTON 方向控件跳过，走 JS）→ WebView
+            return convertFclToZl2Offline(text, name)
         }
         if (input == "ZL2" && output == "FCL") {
             // 前置校验：确认输入确实是 ZL2 布局
@@ -342,12 +495,7 @@ class MainActivity : ComponentActivity() {
         if (input == "FCL" && output == "ZL1") {
             // 前置校验（链式：FCL→ZL2→ZL1）
             require(Regex("\"viewGroups\"").containsMatchIn(text)) { "不是有效的 FCL 控件布局（缺少 viewGroups）" }
-            val zl2 = try {
-                OfficialConverter.convertFclToZl2(this, text)
-            } catch (nativeError: Exception) {
-                CrashLogStore.log(this, "native-fallback-web", "chain reason=${nativeError.message ?: "unknown"}")
-                convertViaWebBlocking(text, "FCL", "ZL2", name)
-            }
+            val zl2 = convertFclToZl2Offline(text, name)
             return convertViaWebBlocking(zl2, "ZL2", "ZL1", name)
         }
         if (input == "ZL1" && output == "FCL") {
@@ -367,6 +515,9 @@ class MainActivity : ComponentActivity() {
 
     /** 在后台线程同步调用 WebView 引擎并等待结果。 */
     private fun convertViaWebBlocking(text: String, input: String, output: String, name: String): String {
+        // 引擎在首帧之后才创建：在这里（后台线程）等待就绪。
+        // 绝不可在 UI 线程等待——引擎创建本身需要 UI 线程，会造成自锁直到超时。
+        require(engineReady.await(20, java.util.concurrent.TimeUnit.SECONDS)) { "转换引擎初始化超时" }
         val latch = java.util.concurrent.CountDownLatch(1)
         var webResult: String? = null
         runOnUiThread {
@@ -375,7 +526,7 @@ class MainActivity : ComponentActivity() {
                 latch.countDown()
             }
         }
-        require(latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) { "WebView 转换超时" }
+        require(latch.await(60, java.util.concurrent.TimeUnit.SECONDS)) { "WebView 转换超时" }
         val r = requireNotNull(webResult) { "WebView 转换没有返回结果" }
         if (r.startsWith("__ERROR__:")) throw IllegalStateException(r.removePrefix("__ERROR__:"))
         return r
@@ -420,16 +571,17 @@ class MainActivity : ComponentActivity() {
     private fun convertInWebView(text: String, input: String, output: String, name: String, done: (String) -> Unit) {
         val webEngine = engine
         if (webEngine == null) {
-            done("__ERROR__:WebView 转换引擎不可用（启动时初始化失败，已降级为仅原生引擎）")
+            done("__ERROR__:WebView 转换引擎不可用（初始化失败，已降级为仅原生引擎）")
             return
         }
         callback = done
-        val payload = Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
+        // 输入经由 Bridge.takePayload() 交给 JS，不再拼进 JS 源码字面量。
+        pendingPayload = text
         val safeName = name.replace("\\", "\\\\").replace("'", "\\'")
         val inputLen = text.length
-        val js = """(function(){try{var raw=decodeURIComponent(escape(atob('$payload')));var o=ControlConverter.parseExactJson(raw);var r=ControlConverter.convert(o,'$input','$output','$safeName');if(r===null||r===undefined){throw new Error('转换器返回空结果')}var text=typeof r==='string'?r:JSON.stringify(r,null,2);if(!text||!text.trim()){throw new Error('转换器返回空文本')}JSON.parse(text);NativeConverter.complete(btoa(unescape(encodeURIComponent(text))))}catch(e){var p={message:e&&e.message?e.message:'',stack:e&&e.stack?e.stack:'',stage:e&&e.conversionStage?e.conversionStage:'convert-unknown',widgetPath:e&&e.widgetPath?e.widgetPath:null,inputFormat:'$input',targetFormat:'$output',layoutName:'$safeName',inputLength:$inputLen};NativeConverter.failed(JSON.stringify(p))}})()"""
+        val js = """(function(){try{var raw=NativeConverter.takePayload();var o=ControlConverter.parseExactJson(raw);var r=ControlConverter.convert(o,'$input','$output','$safeName');if(r===null||r===undefined){throw new Error('转换器返回空结果')}var text=typeof r==='string'?r:JSON.stringify(r);if(!text||!text.trim()){throw new Error('转换器返回空文本')}NativeConverter.complete(text)}catch(e){var p={message:e&&e.message?e.message:'',stack:e&&e.stack?e.stack:'',stage:e&&e.conversionStage?e.conversionStage:'convert-unknown',widgetPath:e&&e.widgetPath?e.widgetPath:null,inputFormat:'$input',targetFormat:'$output',layoutName:'$safeName',inputLength:$inputLen};NativeConverter.failed(JSON.stringify(p))}})()"""
         runCatching { webEngine.evaluateJavascript(js, null) }
-            .onFailure { callback = null; done("__ERROR__:${it.message ?: "无法启动转换"}") }
+            .onFailure { callback = null; pendingPayload = null; done("__ERROR__:${it.message ?: "无法启动转换"}") }
     }
 
     override fun onDestroy() { engine?.destroy(); super.onDestroy() }
@@ -437,80 +589,92 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ConverterApp() {
-    val isDark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    // 深浅色模式（自动/浅色/深色）。放在 ConverterApp 层：切页与旋转都不会丢；写入 SharedPreferences 以便重启后保留。
+    var themeMode by rememberSaveable { mutableStateOf(ThemePrefs.read(context)) }
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        THEME_LIGHT -> false
+        THEME_DARK -> true
+        else -> systemDark
+    }
+    // 调色板只在主题真正切换时重建一次；过渡由 ThemeTransitionOverlay 负责（不逐帧动画颜色）
     val colors = if (isDark) DarkAppColors else LightAppColors
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    // 以 isDark 为 key：主题不变时实例稳定，不会因动画逐帧重建 Miuix 整套配色
     val themeController = remember(isDark) {
-        ThemeController(
-            colorSchemeMode = if (isDark) ColorSchemeMode.Dark else ColorSchemeMode.Light,
-            lightColors = lightColorScheme(
-                primary = Accent,
-                background = LightAppColors.bg,
-                onBackground = LightAppColors.text,
-                surface = LightAppColors.bg,
-                onSurface = LightAppColors.text,
-                surfaceContainer = LightAppColors.card,
-                onSurfaceContainer = LightAppColors.text,
-                surfaceVariant = LightAppColors.input,
-                outline = LightAppColors.inputBorder,
-                dividerLine = LightAppColors.pillBorder
-            ),
-            darkColors = darkColorScheme(
-                primary = Accent,
-                background = DarkAppColors.bg,
-                onBackground = DarkAppColors.text,
-                surface = DarkAppColors.bg,
-                onSurface = DarkAppColors.text,
-                surfaceContainer = DarkAppColors.card,
-                onSurfaceContainer = DarkAppColors.text,
-                surfaceVariant = DarkAppColors.input,
-                outline = DarkAppColors.inputBorder,
-                dividerLine = DarkAppColors.pillBorder
-            )
+    ThemeController(
+        colorSchemeMode = if (isDark) ColorSchemeMode.Dark else ColorSchemeMode.Light,
+        lightColors = lightColorScheme(
+            primary = Accent,
+            background = colors.bg,
+            onBackground = colors.text,
+            surface = colors.bg,
+            onSurface = colors.text,
+            surfaceContainer = colors.card,
+            onSurfaceContainer = colors.text,
+            surfaceVariant = colors.input,
+            outline = colors.inputBorder,
+            dividerLine = colors.pillBorder
+        ),
+        darkColors = darkColorScheme(
+            primary = Accent,
+            background = colors.bg,
+            onBackground = colors.text,
+            surface = colors.bg,
+            onSurface = colors.text,
+            surfaceContainer = colors.card,
+            onSurfaceContainer = colors.text,
+            surfaceVariant = colors.input,
+            outline = colors.inputBorder,
+            dividerLine = colors.pillBorder
         )
+    )
     }
-
     MiuixTheme(controller = themeController) {
         CompositionLocalProvider(LocalLayoutColors provides colors) {
             SystemBarsIconColor(isDarkTheme = isDark)
             var showLicenses by rememberSaveable { mutableStateOf(false) }
             BackHandler(enabled = showLicenses) { showLicenses = false }
+            // 方向判定：横屏把导航栏从底部改为左侧 NavigationRail
+            val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            // 官方 miuix-blur：先在内容上挂 layerBackdrop 捕获背景，导航栏用 textureBlur 采样模糊。
+            // onDraw 里先铺不透明底色，避免文字透明区域在模糊时扩散成色块（官方文档的注意事项）。
+            val backdrop = rememberLayerBackdrop {
+                drawRect(colors.bg)
+                drawContent()
+            }
+            // RuntimeShader 自 API 33 提供：低版本不调用任何模糊 API，回退为半透明底色。
+            val blurSupported = isRuntimeShaderSupported()
+            val density = LocalDensity.current
+            var bottomBarHeight by remember { mutableStateOf(0.dp) }
+            var railWidth by remember { mutableStateOf(0.dp) }
+            // 竖屏底部栏高度转成页面内容末尾的空位；横屏无需（rail 已让出宽度）
+            val contentBottomInset = if (isLandscape) 0.dp else bottomBarHeight
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = colors.bg,
-                bottomBar = {
-                    AnimatedVisibility(
-                        visible = !showLicenses,
-                        enter = slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),
-                        exit = slideOutVertically(tween(240, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(150))
-                    ) {
-                    NavigationBar(
-                        color = colors.bg,
-                        showDivider = true,
-                        defaultWindowInsetsPadding = false,
-                        mode = NavigationBarDisplayMode.IconAndText
-                    ) {
-                        NavigationBarItem(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            icon = MiuixIcons.Home,
-                            label = "主页"
-                        )
-                        NavigationBarItem(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            icon = MiuixIcons.Info,
-                            label = "关于"
-                        )
-                    }
-                    }
-                }
+                containerColor = colors.bg
             ) { paddingValues ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(colors.bg)
                 ) {
+                    // ===== 页面内容（被 layerBackdrop 捕获，供导航栏模糊采样）=====
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .layerBackdrop(backdrop)
+                    ) {
+                        // 导航栏作为浮层压在上方，内容从其下方滑过——模糊才有可采样的背景。
+                        // 横屏向左让出 rail 宽度（避免挡住左栏内容）；竖屏不让位，改由页面自身在
+                        // 滚动末尾补一块等高空位（bottomInset），这样内容能经过导航栏下方又不被遮。
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                .then(if (isLandscape) Modifier.padding(start = railWidth) else Modifier)
+                        ) {
                     AnimatedContent(
                         targetState = showLicenses,
                         transitionSpec = {
@@ -527,7 +691,6 @@ private fun ConverterApp() {
                         if (licenses) {
                             LicensesPage(onBack = { showLicenses = false })
                         } else {
-                            Box(Modifier.fillMaxSize().padding(paddingValues)) {
                             AnimatedContent(
                                 targetState = selectedTab,
                                 transitionSpec = {
@@ -537,19 +700,155 @@ private fun ConverterApp() {
                                 },
                                 label = "tabContent"
                             ) { tab ->
-                                if (tab == 0) HomeTab() else InfoTab(onOpenLicenses = { showLicenses = true })
-                            }
+                                if (tab == 0) HomeTab(bottomInset = contentBottomInset)
+                                else InfoTab(
+                                    onOpenLicenses = { showLicenses = true },
+                                    bottomInset = contentBottomInset,
+                                    themeMode = themeMode,
+                                    onThemeModeChange = { mode ->
+                                        themeMode = mode
+                                        ThemePrefs.write(context, mode)
+                                    }
+                                )
                             }
                         }
                     }
+                        }
+                    }
+
+                    // ===== 导航栏（浮层 + 官方 miuix-blur 毛玻璃）=====
+                    val barColor = if (blurSupported) colors.bg.copy(alpha = 0.72f) else colors.bg
+                    if (isLandscape) {
+                        // 横屏：左侧 NavigationRail；打开许可证页时向左收回（对应竖屏底部栏向下收回）
+                        AnimatedVisibility(
+                            visible = !showLicenses,
+                            modifier = Modifier.align(Alignment.CenterStart),
+                            enter = slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { -it } + fadeIn(tween(200)),
+                            exit = slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { -it } + fadeOut(tween(150))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxHeight()
+                                    .onGloballyPositioned {
+                                        railWidth = with(density) { it.size.width.toDp() }
+                                    }
+                                    .then(
+                                        if (blurSupported) Modifier.textureBlur(backdrop = backdrop, shape = RectangleShape)
+                                        else Modifier
+                                    )
+                            ) {
+                                // 不传 state：禁用展开/收起，保持经典的「图标在上、文字在下」布局
+                                NavigationRail(
+                                    color = barColor
+                                ) {
+                                    AppNavigationRailItems(selectedTab, onSelect = { selectedTab = it })
+                                }
+                            }
+                        }
+                    } else {
+                        AnimatedVisibility(
+                            visible = !showLicenses,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            enter = slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),
+                            exit = slideOutVertically(tween(240, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(150))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .onGloballyPositioned {
+                                        bottomBarHeight = with(density) { it.size.height.toDp() }
+                                    }
+                                    .then(
+                                        if (blurSupported) Modifier.textureBlur(backdrop = backdrop, shape = RectangleShape)
+                                        else Modifier
+                                    )
+                            ) {
+                                NavigationBar(
+                                    color = barColor,
+                                    showDivider = true,
+                                    mode = NavigationBarDisplayMode.IconAndText
+                                ) {
+                                    AppNavigationBarItems(selectedTab, onSelect = { selectedTab = it })
+                                }
+                            }
+                        }
+                    }
+
+                    // 主题切换过渡层：置于最上层，连导航栏一起过渡。不拦截触摸，动画帧不触发重组。
+                    ThemeTransitionOverlay(isDark = isDark, backgroundColor = colors.bg)
                 }
             }
         }
     }
 }
 
+/**
+ * 转换会话状态（进程级持有者）。
+ *
+ * HomeTab 位于 `AnimatedContent(targetState = selectedTab)` 内：切到「关于」会销毁主页组合，
+ * 普通 `remember` 状态随之丢失；横竖屏切换会重建 Activity，同样丢失。
+ * 把这些状态集中放在进程级持有者上，切换页面与旋转后输入、结果、转换状态都能保留。
+ * 注意：不放进 Bundle（rememberSaveable），避免数百 KB 的结果触发 TransactionTooLarge。
+ */
+private object ConversionSession {
+    val sourceState = TextFieldState()
+    val resultState = mutableStateOf("")
+    val statusState = mutableStateOf("选择或粘贴一个布局 JSON")
+    val nameState = mutableStateOf("控制布局")
+    val inputState = mutableStateOf("ZL2")
+    val outputState = mutableStateOf("ZL2")
+    val actualInputState = mutableStateOf("FCL")
+    val onlineState = mutableStateOf(true)
+    val inputTabState = mutableStateOf("粘贴")
+    val showResultState = mutableStateOf(false)
+}
+
+/**
+ * 导航项：竖屏底部 [NavigationBar] 与横屏左侧 [NavigationRail] 共用同一份定义，避免两处维护。
+ * 两个 Miuix 组件的 item 都要求各自的 Scope 接收者，故分别提供扩展函数。
+ */
 @Composable
-private fun InfoTab(onOpenLicenses: () -> Unit) {
+private fun RowScope.AppNavigationBarItems(selectedTab: Int, onSelect: (Int) -> Unit) {
+    NavigationBarItem(
+        selected = selectedTab == 0,
+        onClick = { onSelect(0) },
+        icon = MiuixIcons.Home,
+        label = "主页"
+    )
+    NavigationBarItem(
+        selected = selectedTab == 1,
+        onClick = { onSelect(1) },
+        icon = MiuixIcons.Info,
+        label = "关于"
+    )
+}
+
+/** 横屏左侧 NavigationRail 的导航项：上下用权重空位把图标与文字整体垂直居中。 */
+@Composable
+private fun ColumnScope.AppNavigationRailItems(selectedTab: Int, onSelect: (Int) -> Unit) {
+    Spacer(Modifier.weight(1f))
+    NavigationRailItem(
+        selected = selectedTab == 0,
+        onClick = { onSelect(0) },
+        icon = MiuixIcons.Home,
+        label = "主页"
+    )
+    NavigationRailItem(
+        selected = selectedTab == 1,
+        onClick = { onSelect(1) },
+        icon = MiuixIcons.Info,
+        label = "关于"
+    )
+    Spacer(Modifier.weight(1f))
+}
+
+@Composable
+private fun InfoTab(
+    onOpenLicenses: () -> Unit,
+    bottomInset: Dp = 0.dp,
+    themeMode: String = THEME_AUTO,
+    onThemeModeChange: (String) -> Unit = {}
+) {
     val activity = LocalContext.current as MainActivity
     val colors = layoutColors()
 
@@ -563,8 +862,21 @@ private fun InfoTab(onOpenLicenses: () -> Unit) {
         }.getOrNull().orEmpty().ifBlank { "0.3" }
     }
 
+    // 深浅色模式：官方 WindowDropdownMenu（选中态保存在各 DropdownItem 上）
+    val themeEntry = DropdownEntry(
+        items = THEME_MODES.map { mode ->
+            DropdownItem(
+                text = mode,
+                selected = themeMode == mode,
+                onClick = { onThemeModeChange(mode) }
+            )
+        }
+    )
+
+    // 横屏限宽居中：内容不超过可读宽度；手机竖屏宽度小于该上限时等于无变化。
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        Modifier.fillMaxHeight().widthIn(max = 720.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         Text(
@@ -591,6 +903,21 @@ private fun InfoTab(onOpenLicenses: () -> Unit) {
             }
         }
 
+        SmallTitle(text = "主题", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+            cornerRadius = 16.dp,
+            colors = CardDefaults.defaultColors(color = colors.card)
+        ) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                WindowDropdownMenu(
+                    title = "颜色",
+                    summary = themeMode,
+                    entry = themeEntry
+                )
+            }
+        }
+
         SmallTitle(text = "关于", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
@@ -608,6 +935,9 @@ private fun InfoTab(onOpenLicenses: () -> Unit) {
             }
         }
         Spacer(Modifier.height(12.dp))
+        // 末尾空位：让内容能滑到导航栏下方（模糊可见），又不被遮挡
+        Spacer(Modifier.height(bottomInset))
+        }
     }
 }
 
@@ -631,8 +961,10 @@ private fun LicensesPage(onBack: () -> Unit) {
                 }
             }
         )
+        // 横屏限宽居中（顶部固定标题栏保持全宽）
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            Modifier.fillMaxHeight().widthIn(max = 720.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             Text(
@@ -724,31 +1056,51 @@ private fun LicensesPage(onBack: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
         }
+        }
     }
 }
 
-/** JSON 粘贴输入：独立 Composable 隔离重组范围，大文本编辑时避免整页重组造成卡顿。 */
+/** JSON 粘贴输入：独立 Composable 隔离重组范围；使用 TextFieldState 只排版可见文本。 */
 @Composable
 private fun JsonPasteField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    state: TextFieldState,
     inputColor: Color,
     labelColor: Color
 ) {
+    val context = LocalContext.current
+    // 度量探针：记录大文本变更的发起时刻，并在组合/排版完成后比较，量化「粘贴 → 排版完成」耗时。
+    // 只在超过 3 万字符时记录，日常输入不产生任何日志。
+    val changeAt = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    val changeLen = remember { java.util.concurrent.atomic.AtomicInteger(0) }
+    val probe = remember {
+        InputTransformation {
+            if (length > 30000) {
+                changeLen.set(length)
+                changeAt.set(SystemClock.elapsedRealtime())
+            }
+        }
+    }
+    val textLen = state.text.length
+    LaunchedEffect(textLen) {
+        val at = changeAt.get()
+        if (at > 0L && changeLen.get() == textLen) {
+            CrashLogStore.log(context, "input-layout", "len=$textLen layoutDelay=${SystemClock.elapsedRealtime() - at}ms")
+        }
+    }
     Box(modifier = Modifier.fillMaxWidth()) {
+        // TextFieldState 重载：大文本下只对可见部分做布局，粘贴不会再把整段文本重排。
         TextField(
-            value = value,
-            onValueChange = onValueChange,
+            state = state,
             modifier = Modifier.fillMaxWidth(),
-            minLines = 4,
-            maxLines = 8,
+            lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 4, maxHeightInLines = 8),
+            inputTransformation = probe,
             colors = TextFieldDefaults.textFieldColors(
                 backgroundColor = inputColor,
                 labelColor = labelColor,
                 borderColor = Color.Transparent
             )
         )
-        if (value.isEmpty()) {
+        if (state.text.isEmpty()) {
             Text(
                 "粘贴 FCL、ZL1 或 ZL2 json内容",
                 style = MiuixTheme.textStyles.main,
@@ -762,99 +1114,124 @@ private fun JsonPasteField(
 }
 
 @Composable
-private fun HomeTab() {
+private fun HomeTab(bottomInset: Dp = 0.dp) {
     val activity = LocalContext.current as MainActivity
 
-    var source by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf("") }
-    var name by rememberSaveable { mutableStateOf("控制布局") }
-    var input by rememberSaveable { mutableStateOf("ZL2") }
-    var output by rememberSaveable { mutableStateOf("ZL2") }
-    var actualInput by rememberSaveable { mutableStateOf("FCL") }
-    var status by rememberSaveable { mutableStateOf("选择或粘贴一个布局 JSON") }
+    // 输入文本改用 TextFieldState（Compose 的惰性文本 API）：
+    //  1) 只对「可见文本」做排版，粘贴数十万字符不再逐帧重排整段文本；
+    //  2) 引用传给叶子输入框，HomeTab 组合期不读它的内容，按字重组被限制在输入框内部。
+    // 之前用 TextField(value = String) 时，每次文本变化（包括粘贴、以及页面任何一次重组）
+    // 都要对整段文本做 layout，这正是粘贴卡顿与转换后卡顿的共同根因。
+    // 输入与会话状态挂在进程级持有者上：切换主页/关于（HomeTab 会被销毁重建）或横竖屏切换
+    // （Activity 重建）后，输入文本、转换结果与格式选择都不会丢失。
+    val sourceState = ConversionSession.sourceState
+    var result by ConversionSession.resultState
+    var status by ConversionSession.statusState
+    var name by ConversionSession.nameState
+    var input by ConversionSession.inputState
+    var output by ConversionSession.outputState
+    var actualInput by ConversionSession.actualInputState
+    var online by ConversionSession.onlineState
+    var inputTab by ConversionSession.inputTabState
+    var showResult by ConversionSession.showResultState
     var busy by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    var online by rememberSaveable { mutableStateOf(true) }
-    var inputTab by rememberSaveable { mutableStateOf("粘贴") }
-    var crashLog by remember { mutableStateOf(CrashLogStore.read(activity)) }
-    var runtimeLog by remember { mutableStateOf(CrashLogStore.readRuntime(activity)) }
-    var conversionFailLog by remember { mutableStateOf(CrashLogStore.readConversionFailure(activity)) }
+    // 日志内容改为「打开弹窗时」才读取：原先在 HomeTab 构造时就读 3 份日志（合计最多约 58KB），
+    // 而每次从「关于」切回「主页」都会重建 HomeTab，等于把这段 I/O 塞进切换动画期间。
+    var crashLog by remember { mutableStateOf("") }
+    var runtimeLog by remember { mutableStateOf("") }
+    var conversionFailLog by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(false) }
-    var showResult by remember { mutableStateOf(false) }
     var resultExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     // 仅在空/非空翻转时才触发整页重组，避免大 JSON 编辑时每次按键都重组全部 TabRow
-    val hasSource by remember { derivedStateOf { source.isNotBlank() } }
+    val hasSource by remember { derivedStateOf { sourceState.text.isNotBlank() } }
+
+    LaunchedEffect(showLog) {
+        if (showLog) {
+            val (crash, runtime, failure) = withContext(Dispatchers.IO) {
+                Triple(
+                    CrashLogStore.read(activity),
+                    CrashLogStore.readRuntime(activity),
+                    CrashLogStore.readConversionFailure(activity)
+                )
+            }
+            crashLog = crash
+            runtimeLog = runtime
+            conversionFailLog = failure
+        }
+    }
+
+    // 预览文本：每次转换后在后台格式化一次并缓存；展开/收起不再重算（原先放在动画内会反复重排）。
+    var preview by remember { mutableStateOf<PreviewText?>(null) }
+    LaunchedEffect(result, output) {
+        preview = null
+        if (result.isNotBlank()) {
+            val startedAt = SystemClock.elapsedRealtime()
+            val built = withContext(Dispatchers.Default) { buildPreviewText(result, output) }
+            preview = built
+            CrashLogStore.log(
+                activity,
+                "preview-built",
+                "chars=${result.length} lines=${built.lineCount} elapsed=${SystemClock.elapsedRealtime() - startedAt}ms"
+            )
+        }
+    }
 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching { activity.contentResolver.openInputStream(uri)?.bufferedReader()?.readText().orEmpty() }
-            .onSuccess { text ->
-                source = text
-                val displayName = activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
+        // 读取整份文件（可达数百 KB）放到后台线程：主线程做文件 I/O + 大字符串构造会明显掉帧。
+        scope.launch {
+            status = "正在读取文件…"
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = activity.contentResolver.openInputStream(uri)
+                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    val displayName = activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
+                    }
+                    text to displayName
                 }
-                name = (displayName ?: "控制布局").substringBeforeLast('.', "控制布局")
-                status = "已读取 $name.json"
-                inputTab = "粘贴"
             }
-            .onFailure { status = "读取失败：${it.message ?: "无法读取文件"}" }
+            loaded
+                .onSuccess { (text, displayName) ->
+                    sourceState.edit { replace(0, length, text) }
+                    name = (displayName ?: "控制布局").substringBeforeLast('.', "控制布局")
+                    status = "已读取 $name.json"
+                    inputTab = "粘贴"
+                }
+                .onFailure { status = "读取失败：${it.message ?: "无法读取文件"}" }
+        }
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
+        // 导出（可能是近 MB 的 JSON）同样移到后台线程：原先在主线程 toByteArray + 写流。
+        val payload = result
+        val baseName = exportBaseName(name, actualInput, output)
         saving = true
-        runCatching {
-            require(result.isNotBlank()) { "没有可保存的转换结果" }
-            val bytes = result.toByteArray(Charsets.UTF_8)
-            val stream = requireNotNull(activity.contentResolver.openOutputStream(uri)) { "无法打开目标文件" }
-            stream.use { it.write(bytes) }
+        scope.launch {
+            status = "正在导出…"
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    require(payload.isNotBlank()) { "没有可保存的转换结果" }
+                    val bytes = payload.toByteArray(Charsets.UTF_8)
+                    val stream = requireNotNull(activity.contentResolver.openOutputStream(uri)) { "无法打开目标文件" }
+                    stream.use { it.write(bytes) }
+                }
+            }
+            saving = false
+            outcome
+                .onSuccess { status = "已保存 $baseName.json" }
+                .onFailure { status = "保存失败：${it.message ?: "无法写入文件"}" }
         }
-            .onSuccess { status = "已保存 ${exportBaseName(name, actualInput, output)}.json" }
-            .onFailure { status = "保存失败：${it.message ?: "无法写入文件"}" }
-        saving = false
     }
 
-    val systemDark = isSystemInDarkTheme()
-    val isDark = systemDark
-    val themeController = remember(isDark) {
-        val app = if (isDark) DarkAppColors else LightAppColors
-        ThemeController(
-            colorSchemeMode = if (isDark) ColorSchemeMode.Dark else ColorSchemeMode.Light,
-            lightColors = lightColorScheme(
-                primary = Accent,
-                background = LightAppColors.bg,
-                onBackground = LightAppColors.text,
-                surface = LightAppColors.bg,
-                onSurface = LightAppColors.text,
-                surfaceContainer = LightAppColors.card,
-                onSurfaceContainer = LightAppColors.text,
-                surfaceVariant = LightAppColors.input,
-                outline = LightAppColors.inputBorder,
-                dividerLine = LightAppColors.pillBorder
-            ),
-            darkColors = darkColorScheme(
-                primary = Accent,
-                background = DarkAppColors.bg,
-                onBackground = DarkAppColors.text,
-                surface = DarkAppColors.bg,
-                onSurface = DarkAppColors.text,
-                surfaceContainer = DarkAppColors.card,
-                onSurfaceContainer = DarkAppColors.text,
-                surfaceVariant = DarkAppColors.input,
-                outline = DarkAppColors.inputBorder,
-                dividerLine = DarkAppColors.pillBorder
-            )
-        )
-    }
-
-    val layoutColors = if (isDark) DarkAppColors else LightAppColors
-
-    MiuixTheme(controller = themeController) {
-        CompositionLocalProvider(LocalLayoutColors provides layoutColors) {
-            SystemBarsIconColor(isDarkTheme = isDark)
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
+    // 主题由 ConverterApp 统一提供（含颜色过渡动画）；此处不再重复包一层 MiuixTheme，
+    // 否则内层会用自己的配色覆盖，导致主页跟随不了深浅色切换。
+    // 横屏：左右双栏（左＝格式与输入，右＝输出结果），两栏各自独立滚动；
+    // 竖屏：维持原有单列整体滚动。两种方向复用同一份 inputPane / outputPane，不复制代码。
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val inputPane: @Composable ColumnScope.() -> Unit = {
                     // ===== Header =====
                     Row(
                         Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
@@ -1018,8 +1395,7 @@ private fun HomeTab() {
                             ) { tab ->
                                 if (tab == "粘贴") {
                                     JsonPasteField(
-                                        value = source,
-                                        onValueChange = { source = it },
+                                        state = sourceState,
                                         inputColor = layoutColors().input,
                                         labelColor = layoutColors().textSecondary
                                     )
@@ -1045,12 +1421,14 @@ private fun HomeTab() {
                         onClick = {
                             busy = true
                             status = "正在转换…"
-                            val actual = if (input == "自动") detectFormat(source) else input
+                            // 只在点击时读取输入文本，组合期不读 → 打字不会因订阅输入而整页重组
+                            val inputText = sourceState.text.toString()
+                            val actual = if (input == "自动") detectFormat(inputText) else input
                             actualInput = actual
                             result = ""
                             showResult = false
                             resultExpanded = false
-                            activity.convert(source, actual, output, name, online) { r ->
+                            activity.convert(inputText, actual, output, name, online) { r ->
                                 busy = false
                                 if (r == "__ERROR__:__INVALID_JSON__") {
                                     result = ""
@@ -1076,9 +1454,12 @@ private fun HomeTab() {
                         )
                     ) { Text(if (busy) "转换中…" else "开始转换", style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold) }
 
+            }
+            val outputPane: @Composable ColumnScope.() -> Unit = {
                     // ===== Output Section =====
+                    // 横屏：输出栏常驻显示（无结果时给出占位提示）；竖屏：保持有结果才出现
                     AnimatedVisibility(
-                        visible = showResult && result.isNotBlank(),
+                        visible = isLandscape || (showResult && result.isNotBlank()),
                         enter = fadeIn(tween(200)),
                         exit = fadeOut(tween(150))
                     ) {
@@ -1110,6 +1491,7 @@ private fun HomeTab() {
                                         Button(
                                             onClick = { save.launch("${exportBaseName(name, actualInput, output)}.json") },
                                             modifier = Modifier.weight(1f).height(44.dp),
+                                            enabled = result.isNotBlank(),
                                             cornerRadius = 12.dp
                                         ) { Text("导出", style = MiuixTheme.textStyles.body2) }
                                         Button(
@@ -1120,6 +1502,7 @@ private fun HomeTab() {
                                                 status = "结果已复制"
                                             },
                                             modifier = Modifier.weight(1f).height(44.dp),
+                                            enabled = result.isNotBlank(),
                                             cornerRadius = 12.dp
                                         ) { Text("复制", style = MiuixTheme.textStyles.body2) }
                                     }
@@ -1128,6 +1511,7 @@ private fun HomeTab() {
                                     TextButton(
                                         text = if (resultExpanded) "收起结果" else "展开结果",
                                         onClick = { resultExpanded = !resultExpanded },
+                                        enabled = result.isNotBlank(),
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
@@ -1144,18 +1528,36 @@ private fun HomeTab() {
                                                 cornerRadius = 12.dp,
                                                 colors = CardDefaults.defaultColors(color = layoutColors().input)
                                             ) {
-                                                Text(
-                                                    if (output != "ZL1") prettyJson(result) else result,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .heightIn(max = 250.dp)
-                                                        .verticalScroll(rememberScrollState())
-                                                        .padding(12.dp),
-                                                    color = layoutColors().text,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontSize = 12.sp,
-                                                    lineHeight = 16.sp
-                                                )
+                                                // 预览内容「全量保留」，但只渲染可见行：
+                                                // 原先 Text(prettyJson(result)) 在组合体内、又在展开动画里，会逐帧重排整份文本。
+                                                // 现在格式化结果缓存在 HomeTab（见 preview 状态），展开/收起不会重算；LazyColumn 仅组合可见行。
+                                                val lines = preview
+                                                if (lines == null) {
+                                                    Box(Modifier.fillMaxWidth().height(250.dp).padding(12.dp)) {
+                                                        Text(
+                                                            "正在生成预览…",
+                                                            color = layoutColors().textSecondary,
+                                                            fontSize = 12.sp
+                                                        )
+                                                    }
+                                                } else {
+                                                    LazyColumn(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(250.dp)
+                                                            .padding(12.dp)
+                                                    ) {
+                                                        items(lines.lineCount) { index ->
+                                                            Text(
+                                                                lines.lineAt(index),
+                                                                color = layoutColors().text,
+                                                                fontFamily = FontFamily.Monospace,
+                                                                fontSize = 12.sp,
+                                                                lineHeight = 16.sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1163,11 +1565,31 @@ private fun HomeTab() {
                             }
                         }
                     }
-
-                Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
             }
-        }
-    }
+            // 容器：横屏左右双栏（两栏各自独立滚动），竖屏单列整体滚动
+            if (isLandscape) {
+                Row(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
+                    ) { inputPane() }
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
+                    ) { outputPane() }
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    inputPane()
+                    outputPane()
+                    // 末尾空位：让内容能滑到导航栏下方（模糊可见），又不被遮挡
+                    Spacer(Modifier.height(bottomInset))
+                }
+            }
+
+    // 深浅色模式选择已移到「关于」页（WindowDropdownMenu）
 
     // Log Dialog
     WindowDialog(
@@ -1246,6 +1668,37 @@ private fun SystemBarsIconColor(isDarkTheme: Boolean) {
  * 这样既保证输出框有换行缩进，又不破坏 ZL2 的 signed 64-bit 大整数字面量（如颜色值 -9223372036854775808）。
  * 若无法识别为 JSON（对象/数组），原样返回（保留报错信息等）。
  */
+/**
+ * 大 JSON 预览的数据源：**保留完整文本**，只提供「按行惰性切片」。
+ *
+ * 刻意不把文本切成 N 个小字符串（数万行会产生数万次分配），而是记录行起始偏移，
+ * 由 LazyColumn 仅对可见行调用 [lineAt] 取子串 —— 即"全量保留，只渲染看得到的画面"。
+ */
+private class PreviewText(private val text: String, private val lineStarts: IntArray) {
+    val lineCount: Int get() = lineStarts.size
+
+    fun lineAt(index: Int): String {
+        val start = lineStarts[index]
+        val end = if (index + 1 < lineStarts.size) lineStarts[index + 1] - 1 else text.length
+        return text.substring(start, end.coerceAtLeast(start))
+    }
+}
+
+/** 在后台线程把结果格式化成可虚拟化渲染的预览（ZL1 保持原样，与原行为一致）。 */
+private fun buildPreviewText(raw: String, output: String): PreviewText {
+    val full = if (output != "ZL1") prettyJson(raw) else raw
+    if (full.isEmpty()) return PreviewText(full, IntArray(1))
+    var count = 1
+    for (i in full.indices) if (full[i] == '\n') count++
+    val starts = IntArray(count)
+    var cursor = 0
+    starts[cursor++] = 0
+    for (i in full.indices) {
+        if (full[i] == '\n' && cursor < count) starts[cursor++] = i + 1
+    }
+    return PreviewText(full, starts)
+}
+
 private fun prettyJson(raw: String): String {
     if (raw.isBlank()) return raw
     val trimmed = raw.trim()
@@ -1308,10 +1761,13 @@ private fun isEmptyContainer(s: String, i: Int): Boolean {
     return j < s.length && s[j] == close
 }
 
+/** 缩进串缓存：原先每行都 "  ".repeat(indent) 重新分配，数万行就是数万次分配。 */
+private val INDENT_CACHE = Array(32) { "  ".repeat(it) }
+
 /** 追加换行 + 指定缩进（若上一字符已是换行则只补缩进）。 */
 private fun appendLineIndent(out: StringBuilder, indent: Int) {
     if (out.lastOrNull() != '\n') out.append('\n')
-    out.append("  ".repeat(indent))
+    out.append(if (indent < INDENT_CACHE.size) INDENT_CACHE[indent] else "  ".repeat(indent))
 }
 
 

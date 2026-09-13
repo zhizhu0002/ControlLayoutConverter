@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+      官方背景模糊库 miuix-blur 声明 minSdk 33（RuntimeShader 自 API 33 提供）。
+      本项目 minSdk 26，按官方文档的做法放行合并，并在运行时用
+      isRuntimeShaderSupported() 门控所有模糊调用：低版本自动回退为半透明底色。
+    -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
     <application
         android:allowBackup="false"
         android:label="FCL ZL 控件转换器"
