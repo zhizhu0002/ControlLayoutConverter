@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- debug 变体覆盖：与正式版名称区分（配合 applicationIdSuffix .debug 可同机并存） -->
+    <string name="app_name">FCL ZL 控件转换器 Debug</string>
+</resources>

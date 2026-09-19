@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 正式版应用名。debug 变体由 src/debug/res/values/strings.xml 覆盖。 -->
+    <string name="app_name">FCL ZL 控件转换器</string>
+</resources>

@@ -35,6 +35,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 与正式包区分，允许同一台机器上并存安装：
+            // debug 包名 com.zhizhu.controlconverter.debug（清单里无 FileProvider/authorities，改包名无冲突）
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
