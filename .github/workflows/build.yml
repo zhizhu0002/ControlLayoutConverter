@@ -31,6 +31,19 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # v3 默认安装 'tools platform-tools'，而旧版 'tools' 包已从 Google SDK 仓库移除，
+          # sdkmanager 会以 "Failed to find package 'tools'" 退出码 1 直接失败。
+          # 这里覆写为只装 platform-tools；编译所需的 platform/build-tools 在下一步显式安装。
+          packages: 'platform-tools'
+
+      - name: Install required SDK packages
+        run: |
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+          echo "--- 已安装的 platforms ---"
+          ls "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/platforms"
+          echo "--- 已安装的 build-tools ---"
+          ls "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/build-tools"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
