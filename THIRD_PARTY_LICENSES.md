@@ -36,7 +36,7 @@
 
 | 组件 | 来源 | 许可证 | 说明 |
 |---|---|---|---|
-| **libcc.so** | [NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter) | **MIT** | FastCraft/FCL ↔ ZalithLauncher2 布局转换的原生引擎（Go JNI），作者 NingZeStudio |
+| **libcc.so** | [NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter) | **MIT** | FastCraft/FCL ↔ ZalithLauncher2 布局转换的原生引擎（Rust JNI），作者 NingZeStudio |
 
 > 该原生库用于 `com.tungsten.fcl.util.LayoutConverter`（JNI 封装）与 `OfficialConverter` 的 FCL↔ZL2 转换。按 MIT 许可要求保留其版权与许可声明（见 README 致谢）。
 

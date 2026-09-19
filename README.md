@@ -33,7 +33,7 @@
 | FoldCraftLauncher → ZalithLauncher | libcc + JS 链 | 全 JS 链 |
 | ZalithLauncher → FoldCraftLauncher | JS + libcc 链 | 全 JS 链 |
 
-- **libcc 原生引擎**：C++ 编译的原生库，经 JNI 接入，性能最优。
+- **libcc 原生引擎**：Rust 编写的原生库，经 JNI 接入，性能最优。
 - **WebView JS 引擎**：WebView 内加载 JS 转换器，作为兜底覆盖所有方向。
 - **在线转换**：可选，调用 `api.cc.miawa.cn` 接口，失败时回退本地引擎。
 

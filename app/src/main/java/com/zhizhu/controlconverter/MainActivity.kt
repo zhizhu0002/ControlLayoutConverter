@@ -368,45 +368,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 检测输入是否含 FCL `directionStyles.styleType=BUTTON` 的方向控件（如十字键）。 */
-    private fun hasFclButtonDirections(text: String): Boolean {
-        return runCatching {
-            val root = JSONObject(text)
-            val styles = root.optJSONArray("directionStyles") ?: return@runCatching false
-            val buttonStyles = mutableSetOf<String>()
-            for (i in 0 until styles.length()) {
-                val style = styles.optJSONObject(i) ?: continue
-                if (style.optString("styleType").equals("BUTTON", ignoreCase = true)) {
-                    buttonStyles += style.optString("name")
-                }
-            }
-            val groups = root.optJSONArray("viewGroups") ?: return@runCatching false
-            for (i in 0 until groups.length()) {
-                val directions = groups.optJSONObject(i)
-                    ?.optJSONObject("viewData")?.optJSONArray("directionList") ?: continue
-                for (j in 0 until directions.length()) {
-                    if (buttonStyles.contains(directions.optJSONObject(j)?.optString("style"))) return@runCatching true
-                }
-            }
-            false
-        }.getOrDefault(false)
-    }
-
     /**
-     * FCL 的 BUTTON 方向控件不能交给 libcc：该引擎会把它当作 ZL2 摇杆。
-     * 这类输入改走内置 JS 转换器，由 JS 拆成八个普通方向按钮。
+     * FCL → ZL2：原生 libcc 优先，仅当原生失败时才回退内置 JS 转换器。
+     *
+     * 上游 Rust 版 libcc 在 lossless 模式下会一并转换方向控件（ROCKER 与 BUTTON 样式都映射为
+     * ZL2 摇杆 + 摇杆样式），因此不再需要按输入内容绕道 JS。
      */
     private fun convertFclToZl2Offline(text: String, name: String): String {
-        return if (hasFclButtonDirections(text)) {
-            CrashLogStore.log(this, "native-skipped-button-direction", "reason=libcc maps BUTTON direction to joystick")
+        return try {
+            OfficialConverter.convertFclToZl2(this, text)
+        } catch (nativeError: Exception) {
+            CrashLogStore.log(this, "native-fallback-web", "reason=${nativeError.message ?: "unknown"}")
             convertViaWebBlocking(text, "FCL", "ZL2", name)
-        } else {
-            try {
-                OfficialConverter.convertFclToZl2(this, text)
-            } catch (nativeError: Exception) {
-                CrashLogStore.log(this, "native-fallback-web", "reason=${nativeError.message ?: "unknown"}")
-                convertViaWebBlocking(text, "FCL", "ZL2", name)
-            }
         }
     }
 
@@ -470,7 +443,7 @@ class MainActivity : ComponentActivity() {
         if (input == "FCL" && output == "ZL2") {
             // 前置校验：确认输入确实是 FCL 布局，避免 libcc 原生宽松解析把别的内容"侥幸"转换成功
             require(Regex("\"viewGroups\"").containsMatchIn(text)) { "不是有效的 FCL 控件布局（缺少 viewGroups）" }
-            // 引擎优先级：libcc 原生（BUTTON 方向控件跳过，走 JS）→ WebView
+            // 引擎优先级：libcc 原生（含方向控件）→ WebView
             return convertFclToZl2Offline(text, name)
         }
         if (input == "ZL2" && output == "FCL") {

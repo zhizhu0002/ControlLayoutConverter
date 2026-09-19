@@ -3,6 +3,21 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循语义化版本（SemVer）。
 
+## [0.5] - 2026-09-19
+
+### 转换引擎
+
+- **libcc.so 同步至上游 Rust 重写版**（[NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter)，原为 Go 版），JNI 接口不变
+- **FCL → ZL2 移除 JS 旁路**：原先遇到 BUTTON 样式方向控件会绕道 WebView JS 引擎，现统一由原生引擎转换，方向控件转为 ZL2 摇杆
+
+### 体积
+
+- 原生库 4.33MB → 0.89MB；Debug 包 22.98MB → 14.69MB
+
+### 文档
+
+- 引擎描述更正：`C++` / `Go JNI` → `Rust`
+
 ## [0.4] - 2026-09-13
 
 ### 性能
@@ -75,6 +90,7 @@
 - 布局 JSON 文件选择、导出与重命名
 - 转换失败 / 运行 / 崩溃日志记录与导出
 
+[0.5]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.5
 [0.4]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.4
 [0.3]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.3
 [1.0]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v1.0

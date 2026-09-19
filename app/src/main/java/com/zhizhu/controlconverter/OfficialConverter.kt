@@ -7,7 +7,7 @@ import java.io.File
 import java.util.UUID
 
 /**
- * 官方 control-converter libcc.so 原生转换（Go JNI）。
+ * 官方 control-converter libcc.so 原生转换（Rust JNI）。
  * 支持 FCL -> ZL2 与 ZL2 -> FCL 双向。
  */
 object OfficialConverter {
