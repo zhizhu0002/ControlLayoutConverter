@@ -3,6 +3,28 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循语义化版本（SemVer）。
 
+## [0.6] - 2026-09-19
+
+### ZL1 转换修复
+
+- **摇杆尺寸偏小**：ZL2→ZL1 的摇杆尺寸原先按 `sizePercentage / 100` 计算，2500/5000 只得到 50dp，正确应为 90dp/180dp；且 50dp 下限把小摇杆一律压平。现按屏幕高度占比换算，`sizeType` 为 dp 时直接取 `sizeDp`
+- **摇杆方向键被丢弃**：原先固定输出 WASD，自定义方向键的摇杆转换后一律变成 WASD。现从方向事件还原真实键码
+- **抽屉把手丢失位置与尺寸**：真实 ZL2 布局的抽屉把手缺少 `dynamicX` / `width` 等几何字段，在 ZL1 里会全部退化并叠在同一处。现按把手按钮还原几何；ZL2 独立叠加层没有把手按钮时，在右上角错开补齐可点把手
+- 转换校验补强：抽屉把手必须有几何信息、摇杆数量不得下降
+
+### 界面
+
+- 横屏左右两栏（导入设置 / 导出结果）之间新增分割线
+- 横屏侧边导航栏新增右侧分割线
+
+### 构建
+
+- debug 包改为独立包名 `com.zhizhu.controlconverter.debug`、名称「FCL ZL 控件转换器 Debug」，可与正式版同机并存
+
+### 说明
+
+- ZL1 的抽屉结构（`mDrawerDataList`）只有 `buttonProperties`，无法表达「抽屉内的摇杆」。ZL2→ZL1 时抽屉层里的摇杆会并入主屏摇杆列表，这是 ZL1 格式本身的能力限制
+
 ## [0.5] - 2026-09-19
 
 ### 转换引擎
@@ -90,6 +112,7 @@
 - 布局 JSON 文件选择、导出与重命名
 - 转换失败 / 运行 / 崩溃日志记录与导出
 
+[0.6]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.6
 [0.5]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.5
 [0.4]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.4
 [0.3]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.3

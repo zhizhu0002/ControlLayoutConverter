@@ -118,6 +118,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -712,7 +713,8 @@ private fun ConverterApp() {
                             ) {
                                 // 不传 state：禁用展开/收起，保持经典的「图标在上、文字在下」布局
                                 NavigationRail(
-                                    color = barColor
+                                    color = barColor,
+                                    showDivider = true
                                 ) {
                                     AppNavigationRailItems(selectedTab, onSelect = { selectedTab = it })
                                 }
@@ -1546,6 +1548,8 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                     Column(
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
                     ) { inputPane() }
+                    // 导入设置栏 ｜ 导出结果栏 之间的分割线（Miuix 官方组件，用其默认粗细与颜色）
+                    VerticalDivider(modifier = Modifier.fillMaxHeight())
                     Column(
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
                     ) { outputPane() }

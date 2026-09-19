@@ -1047,6 +1047,39 @@
       var yExpr=meta&&meta.dynamicY?String(meta.dynamicY):(yPct.toFixed(4)+' * ${screen_height} - ('+yPct.toFixed(4)+' * ${height})');
       return {bgColor:bgColor,cornerRadius:cornerRadius,displayInGame:v!=='in_menu',displayInMenu:v!=='in_game',dynamicX:xExpr,dynamicY:yExpr,height:Math.max(1,Math.round(height*100)/100),isSwipeable:!!b.isSwipple,isToggle:!!b.isToggleable,keycodes:keys.slice(0,4),name:textValue(b.text),opacity:opacity,passThruEnabled:!!b.isPenetrable,strokeColor:strokeColor,strokeWidth:strokeWidth,width:Math.max(1,Math.round(width*100)/100)};
     }
+    // ---- 抽屉把手几何 ----
+    // ZL1 的 mDrawerDataList[].properties 就是把手控件本体（外观 + 位置 + 尺寸），
+    // 必须给全几何字段；否则真实 ZL1 里把手全部退化为默认值并叠在同一处（实测 7/7、40/40 缺几何）。
+    function posExpr(pct, axis) {
+      var v=Math.round(clamp(finiteNumber(pct,0),0,1)*10000)/10000;
+      return v.toFixed(4)+' * ${'+axis+'} - ('+v.toFixed(4)+' * ${'+(axis==='screen_width'?'width':'height')+'})';
+    }
+    // 真实 ZL2 的抽屉来自主界面把手按钮：该按钮本身即把手，外观与几何都以它为准
+    function handleFromButton(btn, name) { var p=control(btn,'always'); p.name=name; return p; }
+    // ZL2 里的独立叠加层没有把手按钮，转成 ZL1 抽屉后必须补出可点把手。
+    // 用右上角向右下错开的排布：保证不与主界面控件大面积重叠，也避免多个把手叠在同一处。
+    // （不借用层内首个控件的尺寸：那可能是整层背景板，会生成遮屏的巨型把手。）
+    var syntheticHandleSeq=0;
+    function handleFromLayer(layer) {
+      var vis=String((layer&&layer.visibilityType)||'always').toLowerCase();
+      var slot=syntheticHandleSeq++, col=Math.floor(slot/12), row=slot%12;
+      return {bgColor:2150770688,cornerRadius:10,strokeColor:-1,strokeWidth:0,
+        displayInGame:vis!=='in_menu',displayInMenu:vis!=='in_game',
+        dynamicX:posExpr(clamp(0.86-col*0.12,0.02,0.98),'screen_width'),
+        dynamicY:posExpr(clamp(0.03+row*0.08,0,0.9),'screen_height'),
+        width:64,height:28,
+        isSwipeable:false,isToggle:false,keycodes:[0,0,0,0],opacity:1,passThruEnabled:false};
+    }
+    // ZL2 方向事件 -> ZL1 键码（ZL1 的 mJoystickDataList.keycodes 顺序为 north, west, south, east）
+    function keycodeFromEvents(events, fallback) {
+      var list=events||[];
+      for(var i=0;i<list.length;i++){
+        var e=list[i]; if(!e) continue;
+        if(e.type==='key'){var k=reverseGlfw(e.key); if(k!=null) return k;}
+        else {var sk=specialKey(e); if(sk!=null) return sk;}
+      }
+      return fallback;
+    }
     var normalLayers=src.layers.filter(function(l){return String(l.name||'').toLowerCase()!=='gui';});
     // uuid -> 图层 映射，用于把手/抽屉互查
     var layerByUuid={}; normalLayers.forEach(function(l){if(l.uuid)layerByUuid[l.uuid]=l;});
@@ -1100,7 +1133,7 @@
             var handleProps=null;
             if(tMeta&&tMeta.kind==='drawer'&&tMeta.properties) handleProps=clone(tMeta.properties);
             else if(tMeta&&tMeta.kind==='layer'&&tMeta.properties) handleProps=clone(tMeta.properties);
-            else handleProps={name:String(target.name||'抽屉'),displayInGame:target.visibilityType!=='in_menu',displayInMenu:target.visibilityType!=='in_game',bgColor:2150770688,strokeColor:-1,strokeWidth:0,cornerRadius:10};
+            else handleProps=handleFromButton(b, String(target.name||'抽屉'));
             handleProps.name=textValue(b.text)||handleProps.name||String(target.name||'抽屉');
             var drawerButtons=(target.normalButtons||[]).map(function(tb){return control(tb,tb.visibilityType||target.visibilityType);});
             drawers.push({buttonProperties:drawerButtons,orientation:(tMeta&&tMeta.orientation)||'FREE',properties:handleProps,
@@ -1123,7 +1156,7 @@
         (l.normalButtons||[]).forEach(function(b){collectSynthetic(b);});
         var layerBtns=(l.normalButtons||[]).map(function(b){return control(b,b.visibilityType||l.visibilityType);});
         drawers.push({buttonProperties:layerBtns,orientation:'FREE',
-          properties:{name:String(l.name||'图层'),displayInGame:l.visibilityType!=='in_menu',displayInMenu:l.visibilityType!=='in_game',bgColor:2150770688,strokeColor:-1,strokeWidth:0,cornerRadius:10},
+          properties:handleFromLayer(l),
           _control_converter_layer:{kind:'layer',uuid:l.uuid,name:String(l.name||''),hide:!!l.hide,visibilityType:String(l.visibilityType||'always'),
             widgets:{buttons:clone(l.normalButtons||[]),textBoxes:clone(l.textBoxes||[]),joysticks:clone(l.joystickButtons||[])}}});
         handledDrawerUuids[l.uuid]=true;
@@ -1143,8 +1176,20 @@
     // ZL2 v12 原生摇杆转换为 Pojav 的 mJoystickDataList；保留方向事件和摇杆属性。
     normalLayers.forEach(function(l){
       (l.joystickButtons||[]).forEach(function(j){
-        var p=j.position||{}, ev=j.directionEvents||{}, size=Number(j.sizePercentage)||2500;
-        joysticks.push({name:'摇杆',keycodes:[87,65,83,68],dynamicX:(Number(p.x)||0)/10000+' * ${screen_width}',dynamicY:(Number(p.y)||0)/10000+' * ${screen_height}',width:Math.max(50,Math.round(size/100)),height:Math.max(50,Math.round(size/100)),isSwipeable:true,isToggle:!!j.canLock,opacity:1,bgColor:0x4d000000,strokeColor:-1,strokeWidth:0,cornerRadius:50,displayInGame:true,displayInMenu:true,forwardLock:!!j.canLock,absolute:j.triggerMode==='absolute',_control_converter:{source:'ZL2',joystickUuid:j.uuid,directionEvents:ev}});
+        var p=j.position||{}, ev=j.directionEvents||{};
+        // 键码从方向事件还原（顺序 north, west, south, east）。写死 WASD 会让自定义方向键的摇杆全部变成 WASD。
+        var keys=[keycodeFromEvents(ev.north,87),keycodeFromEvents(ev.west,65),keycodeFromEvents(ev.south,83),keycodeFromEvents(ev.east,68)];
+        // 尺寸：sizePercentage/10000 即屏幕高度占比（与 zl2JoystickToFclDirection 的约定一致）；
+        // sizeType 为 dp/absolute 时直接取 sizeDp。旧实现用 sizePercentage/100，在 2500/5000 下得到 50dp，
+        // 而正确值分别为 90dp/180dp；并且 max(50,·) 下限会把小摇杆一律压成 50dp。
+        var st=String(j.sizeType||'').toLowerCase(), isAbs=(st==='dp'||st==='dip'||st==='absolute');
+        var pctSize=finiteNumber(j.sizePercentage,NaN), dpSize=finiteNumber(j.sizeDp,NaN), side;
+        if(isAbs&&isFinite(dpSize)&&dpSize>0) side=dpSize;
+        else if(isFinite(pctSize)&&pctSize>0) side=pctSize/10000*DP_SH;
+        else if(isFinite(dpSize)&&dpSize>0) side=dpSize;
+        else side=90;
+        side=Math.max(20,Math.round(side*100)/100);
+        joysticks.push({name:'摇杆',keycodes:keys,dynamicX:(Number(p.x)||0)/10000+' * ${screen_width}',dynamicY:(Number(p.y)||0)/10000+' * ${screen_height}',width:side,height:side,isSwipeable:true,isToggle:!!j.canLock,opacity:1,bgColor:0x4d000000,strokeColor:-1,strokeWidth:0,cornerRadius:50,displayInGame:true,displayInMenu:true,forwardLock:!!j.canLock,absolute:j.triggerMode==='absolute',_control_converter:{source:'ZL2',joystickUuid:j.uuid,layerUuid:l.uuid,directionEvents:ev}});
       });
     });
     var info=src.info||{};
@@ -1368,6 +1413,12 @@
     // ZL2→ZL1：摇杆退回单个 mJoystickDataList，合成方向按钮不再逐键计入，故只校验主屏+抽屉按钮守恒
     if(input==='ZL2' && target==='ZL1' && a.joystick>0 && b.total+ (a.joystick>0?0:0) < a.normal+a.text-a.joystick*7) throw new Error('控件完整性校验失败：ZL2→ZL1 控件数量下降（'+details+'）');
     if(input==='ZL2' && target==='ZL1' && a.joystick===0 && b.total<a.normal+a.text) throw new Error('控件完整性校验失败：ZL2→ZL1 控件数量下降（'+details+'）');
+    if(input==='ZL2' && target==='ZL1'){
+      // 抽屉把手必须带几何，否则真实 ZL1 会把所有把手叠在同一处
+      (out.mDrawerDataList||[]).forEach(function(d,i){var hp=d.properties||{};if(hp.dynamicX==null||hp.width==null) throw new Error('抽屉把手缺少位置/尺寸：mDrawerDataList['+i+']');});
+      var srcJoy=0;(source.layers||[]).forEach(function(l){srcJoy+=(l.joystickButtons||[]).length;});
+      if((out.mJoystickDataList||[]).length<srcJoy) throw new Error('摇杆数量下降：source='+srcJoy+' target='+(out.mJoystickDataList||[]).length);
+    }
     if(input==='ZL1' && target==='ZL2' && b.total<a.total) throw new Error('控件完整性校验失败：ZL1→ZL2 控件数量下降（'+details+'）');
     if(input==='FCL' && (target==='ZL1'||target==='ZL2') && b.total<a.total) throw new Error('控件完整性校验失败：FCL→'+target+' 控件数量下降（'+details+'）');
     return out;
