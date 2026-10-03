@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- English launcher name, used when the system language is English.
+         The in-app Settings > Language toggle (中文/English) is independent of this
+         and controls the app's own UI text regardless of system locale. -->
+    <string name="app_name">FCL/ZL Control Converter</string>
+</resources>

@@ -3,6 +3,22 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循语义化版本（SemVer）。
 
+## [未发布]
+
+### 界面
+
+- **新增英文界面**：关于页在「主题」与「关于」之间新增「语言」板块，可在中文 / English 之间切换，选择会记住
+- 界面文案与「界面语言」解耦：切换语言不影响任何已保存的数据（主题偏好、转换结果、导出文件名格式）
+- 首次启动未做选择时跟随系统语言（系统为中文则中文，否则英文）
+- 桌面图标名也分语言：英文系统显示 `FCL/ZL Control Converter`（debug 为 `… Debug`）
+
+### 内部
+
+- 状态栏文字颜色改由显式的状态类型驱动，不再靠匹配中文前缀（原写法在英文界面下会失效）
+
+> 感谢 [@vvikramsingh937-web](https://github.com/vvikramsingh937-web) 在
+> [#1](https://github.com/zhizhu0002/ControlLayoutConverter/issues/1) 提供的英文版与中英双语实现。
+
 ## [0.6] - 2026-09-19
 
 ### ZL1 转换修复

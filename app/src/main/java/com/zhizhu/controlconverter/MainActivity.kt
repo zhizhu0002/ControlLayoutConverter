@@ -566,6 +566,9 @@ private fun ConverterApp() {
     val context = LocalContext.current
     // 深浅色模式（自动/浅色/深色）。放在 ConverterApp 层：切页与旋转都不会丢；写入 SharedPreferences 以便重启后保留。
     var themeMode by rememberSaveable { mutableStateOf(ThemePrefs.read(context)) }
+    // Interface language (中文 / English). Same persistence pattern as themeMode: read once, write on toggle.
+    var language by rememberSaveable { mutableStateOf(LanguagePrefs.read(context)) }
+    val strings = stringsFor(language)
     val systemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
         THEME_LIGHT -> false
@@ -606,7 +609,7 @@ private fun ConverterApp() {
     )
     }
     MiuixTheme(controller = themeController) {
-        CompositionLocalProvider(LocalLayoutColors provides colors) {
+        CompositionLocalProvider(LocalLayoutColors provides colors, LocalStrings provides strings) {
             SystemBarsIconColor(isDarkTheme = isDark)
             var showLicenses by rememberSaveable { mutableStateOf(false) }
             BackHandler(enabled = showLicenses) { showLicenses = false }
@@ -682,6 +685,11 @@ private fun ConverterApp() {
                                     onThemeModeChange = { mode ->
                                         themeMode = mode
                                         ThemePrefs.write(context, mode)
+                                    },
+                                    language = language,
+                                    onLanguageChange = { code ->
+                                        language = code
+                                        LanguagePrefs.write(context, code)
                                     }
                                 )
                             }
@@ -768,15 +776,27 @@ private fun ConverterApp() {
 private object ConversionSession {
     val sourceState = TextFieldState()
     val resultState = mutableStateOf("")
-    val statusState = mutableStateOf("选择或粘贴一个布局 JSON")
+    val statusState = mutableStateOf(ZH.statusReady)
+    /** True until the first real status update; lets the UI re-localize the placeholder on language switch. */
+    val statusIsDefaultState = mutableStateOf(true)
+    /** 0 = normal, 1 = error, 2 = success — drives status text color without parsing localized text. */
+    val statusKindState = mutableStateOf(0)
     val nameState = mutableStateOf("控制布局")
     val inputState = mutableStateOf("ZL2")
     val outputState = mutableStateOf("ZL2")
     val actualInputState = mutableStateOf("FCL")
     val onlineState = mutableStateOf(true)
-    val inputTabState = mutableStateOf("粘贴")
+    val inputTabState = mutableStateOf(TAB_PASTE)
     val showResultState = mutableStateOf(false)
 }
+
+private const val STATUS_NORMAL = 0
+private const val STATUS_ERROR = 1
+private const val STATUS_SUCCESS = 2
+
+private const val FORMAT_AUTO = "AUTO"
+private const val TAB_PASTE = "PASTE"
+private const val TAB_FILE = "FILE"
 
 /**
  * 导航项：竖屏底部 [NavigationBar] 与横屏左侧 [NavigationRail] 共用同一份定义，避免两处维护。
@@ -784,35 +804,37 @@ private object ConversionSession {
  */
 @Composable
 private fun RowScope.AppNavigationBarItems(selectedTab: Int, onSelect: (Int) -> Unit) {
+    val strings = LocalStrings.current
     NavigationBarItem(
         selected = selectedTab == 0,
         onClick = { onSelect(0) },
         icon = MiuixIcons.Home,
-        label = "主页"
+        label = strings.navHome
     )
     NavigationBarItem(
         selected = selectedTab == 1,
         onClick = { onSelect(1) },
         icon = MiuixIcons.Info,
-        label = "关于"
+        label = strings.navAbout
     )
 }
 
 /** 横屏左侧 NavigationRail 的导航项：上下用权重空位把图标与文字整体垂直居中。 */
 @Composable
 private fun ColumnScope.AppNavigationRailItems(selectedTab: Int, onSelect: (Int) -> Unit) {
+    val strings = LocalStrings.current
     Spacer(Modifier.weight(1f))
     NavigationRailItem(
         selected = selectedTab == 0,
         onClick = { onSelect(0) },
         icon = MiuixIcons.Home,
-        label = "主页"
+        label = strings.navHome
     )
     NavigationRailItem(
         selected = selectedTab == 1,
         onClick = { onSelect(1) },
         icon = MiuixIcons.Info,
-        label = "关于"
+        label = strings.navAbout
     )
     Spacer(Modifier.weight(1f))
 }
@@ -822,10 +844,13 @@ private fun InfoTab(
     onOpenLicenses: () -> Unit,
     bottomInset: Dp = 0.dp,
     themeMode: String = THEME_AUTO,
-    onThemeModeChange: (String) -> Unit = {}
+    onThemeModeChange: (String) -> Unit = {},
+    language: String = "zh",
+    onLanguageChange: (String) -> Unit = {}
 ) {
     val activity = LocalContext.current as MainActivity
     val colors = layoutColors()
+    val strings = LocalStrings.current
 
     fun openUrl(url: String) {
         runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -837,13 +862,32 @@ private fun InfoTab(
         }.getOrNull().orEmpty().ifBlank { "0.3" }
     }
 
+    // Theme-mode label shown to the user, decoupled from the persisted token (THEME_AUTO etc.)
+    // so switching interface language never touches the saved preference value.
+    fun themeModeLabel(mode: String): String = when (mode) {
+        THEME_LIGHT -> strings.themeLight
+        THEME_DARK -> strings.themeDark
+        else -> strings.themeAuto
+    }
+
     // 深浅色模式：官方 WindowDropdownMenu（选中态保存在各 DropdownItem 上）
     val themeEntry = DropdownEntry(
         items = THEME_MODES.map { mode ->
             DropdownItem(
-                text = mode,
+                text = themeModeLabel(mode),
                 selected = themeMode == mode,
                 onClick = { onThemeModeChange(mode) }
+            )
+        }
+    )
+
+    // Interface language: same WindowDropdownMenu pattern as the theme picker above.
+    val languageEntry = DropdownEntry(
+        items = listOf("zh" to strings.languageZh, "en" to strings.languageEn).map { (code, label) ->
+            DropdownItem(
+                text = label,
+                selected = language == code,
+                onClick = { onLanguageChange(code) }
             )
         }
     )
@@ -855,30 +899,30 @@ private fun InfoTab(
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         Text(
-            "关于",
+            strings.aboutTitle,
             style = MiuixTheme.textStyles.title1,
             fontWeight = FontWeight.Bold,
             color = colors.text,
             modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 6.dp)
         )
 
-        SmallTitle(text = "应用", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
+        SmallTitle(text = strings.appSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
             cornerRadius = 16.dp,
             colors = CardDefaults.defaultColors(color = colors.card)
         ) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                BasicComponent(title = "版本", summary = versionName)
+                BasicComponent(title = strings.versionLabel, summary = versionName)
                 ArrowPreference(
-                    title = "GitHub 开源页面",
+                    title = strings.githubPageTitle,
                     summary = "ControlLayoutConverter",
                     onClick = { openUrl("https://github.com/zhizhu0002/ControlLayoutConverter") }
                 )
             }
         }
 
-        SmallTitle(text = "主题", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+        SmallTitle(text = strings.themeSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
             cornerRadius = 16.dp,
@@ -886,25 +930,40 @@ private fun InfoTab(
         ) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 WindowDropdownMenu(
-                    title = "颜色",
-                    summary = themeMode,
+                    title = strings.colorLabel,
+                    summary = themeModeLabel(themeMode),
                     entry = themeEntry
                 )
             }
         }
 
-        SmallTitle(text = "关于", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+        SmallTitle(text = strings.languageSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
             cornerRadius = 16.dp,
             colors = CardDefaults.defaultColors(color = colors.card)
         ) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                BasicComponent(title = "开发者", summary = "zhizhu0002")
-                BasicComponent(title = "开源许可证", summary = "MIT License")
+                WindowDropdownMenu(
+                    title = strings.languageLabel,
+                    summary = if (language == "en") strings.languageEn else strings.languageZh,
+                    entry = languageEntry
+                )
+            }
+        }
+
+        SmallTitle(text = strings.aboutSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
+            cornerRadius = 16.dp,
+            colors = CardDefaults.defaultColors(color = colors.card)
+        ) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                BasicComponent(title = strings.developerLabel, summary = "zhizhu0002")
+                BasicComponent(title = strings.licenseLabel, summary = "MIT License")
                 ArrowPreference(
-                    title = "第三方开源项目",
-                    summary = "查看许可证与致谢",
+                    title = strings.thirdPartyTitle,
+                    summary = strings.thirdPartySummary,
                     onClick = onOpenLicenses
                 )
             }
@@ -920,6 +979,7 @@ private fun InfoTab(
 private fun LicensesPage(onBack: () -> Unit) {
     val activity = LocalContext.current as MainActivity
     val colors = layoutColors()
+    val strings = LocalStrings.current
 
     fun openUrl(url: String) {
         runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -927,12 +987,12 @@ private fun LicensesPage(onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(colors.bg)) {
         SmallTopAppBar(
-            title = "第三方开源项目",
+            title = strings.thirdPartyTitle,
             color = colors.bg,
             titleColor = colors.text,
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(MiuixIcons.Back, contentDescription = "返回", tint = colors.text)
+                    Icon(MiuixIcons.Back, contentDescription = strings.licensesBack, tint = colors.text)
                 }
             }
         )
@@ -943,13 +1003,13 @@ private fun LicensesPage(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             Text(
-                "ControlLayoutConverter 用到了下面这些开源项目。点击任意一项可以打开它的主页，去看它自己的许可证原文。",
+                strings.licensesIntro,
                 style = MiuixTheme.textStyles.body2,
                 color = colors.textSecondary,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
             )
 
-            SmallTitle(text = "运行时库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 4.dp))
+            SmallTitle(text = strings.runtimeLibsSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 4.dp))
             Card(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                 cornerRadius = 16.dp,
@@ -969,7 +1029,7 @@ private fun LicensesPage(onBack: () -> Unit) {
                 }
             }
 
-            SmallTitle(text = "组件库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            SmallTitle(text = strings.componentLibsSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
             Card(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                 cornerRadius = 16.dp,
@@ -989,7 +1049,7 @@ private fun LicensesPage(onBack: () -> Unit) {
                 }
             }
 
-            SmallTitle(text = "原生转换库", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            SmallTitle(text = strings.nativeLibSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
             Card(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                 cornerRadius = 16.dp,
@@ -1004,7 +1064,7 @@ private fun LicensesPage(onBack: () -> Unit) {
                 }
             }
 
-            SmallTitle(text = "在线服务", textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            SmallTitle(text = strings.onlineServiceSection, textColor = colors.textSecondary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
             Card(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                 cornerRadius = 16.dp,
@@ -1013,14 +1073,14 @@ private fun LicensesPage(onBack: () -> Unit) {
                 Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                     ArrowPreference(
                         title = "api.cc.miawa.cn",
-                        summary = "在线转换接口 · 可选使用",
+                        summary = strings.onlineServiceSummary,
                         onClick = { openUrl("https://api.cc.miawa.cn") }
                     )
                 }
             }
 
             Text(
-                "你知道吗：其实本软件的大部分UI都是借鉴 MobileGlues（https://github.com/MobileGL-Dev/MobileGlues-release）的",
+                strings.funFact,
                 style = MiuixTheme.textStyles.footnote2,
                 color = colors.textSecondary,
                 modifier = Modifier
@@ -1077,7 +1137,7 @@ private fun JsonPasteField(
         )
         if (state.text.isEmpty()) {
             Text(
-                "粘贴 FCL、ZL1 或 ZL2 json内容",
+                LocalStrings.current.pasteHint,
                 style = MiuixTheme.textStyles.main,
                 color = labelColor,
                 modifier = Modifier
@@ -1099,9 +1159,22 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
     // 都要对整段文本做 layout，这正是粘贴卡顿与转换后卡顿的共同根因。
     // 输入与会话状态挂在进程级持有者上：切换主页/关于（HomeTab 会被销毁重建）或横竖屏切换
     // （Activity 重建）后，输入文本、转换结果与格式选择都不会丢失。
+    val strings = LocalStrings.current
     val sourceState = ConversionSession.sourceState
     var result by ConversionSession.resultState
     var status by ConversionSession.statusState
+    var statusIsDefault by ConversionSession.statusIsDefaultState
+    var statusKind by ConversionSession.statusKindState
+    /** Sets the status text/color together, and marks it non-default the moment the user does anything. */
+    fun setStatus(text: String, kind: Int = STATUS_NORMAL) {
+        status = text
+        statusKind = kind
+        statusIsDefault = false
+    }
+    // Re-localize the placeholder status if the user switches language before doing anything else.
+    LaunchedEffect(strings) {
+        if (statusIsDefault) status = strings.statusReady
+    }
     var name by ConversionSession.nameState
     var input by ConversionSession.inputState
     var output by ConversionSession.outputState
@@ -1157,7 +1230,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
         uri ?: return@rememberLauncherForActivityResult
         // 读取整份文件（可达数百 KB）放到后台线程：主线程做文件 I/O + 大字符串构造会明显掉帧。
         scope.launch {
-            status = "正在读取文件…"
+            setStatus(strings.readingFile)
             val loaded = withContext(Dispatchers.IO) {
                 runCatching {
                     val text = activity.contentResolver.openInputStream(uri)
@@ -1172,10 +1245,10 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                 .onSuccess { (text, displayName) ->
                     sourceState.edit { replace(0, length, text) }
                     name = (displayName ?: "控制布局").substringBeforeLast('.', "控制布局")
-                    status = "已读取 $name.json"
-                    inputTab = "粘贴"
+                    setStatus(strings.readDone(name))
+                    inputTab = TAB_PASTE
                 }
-                .onFailure { status = "读取失败：${it.message ?: "无法读取文件"}" }
+                .onFailure { setStatus(strings.readFailed(it.message ?: strings.noReadableFile), STATUS_ERROR) }
         }
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -1185,19 +1258,19 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
         val baseName = exportBaseName(name, actualInput, output)
         saving = true
         scope.launch {
-            status = "正在导出…"
+            setStatus(strings.exporting)
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    require(payload.isNotBlank()) { "没有可保存的转换结果" }
+                    require(payload.isNotBlank()) { strings.noExportableResult }
                     val bytes = payload.toByteArray(Charsets.UTF_8)
-                    val stream = requireNotNull(activity.contentResolver.openOutputStream(uri)) { "无法打开目标文件" }
+                    val stream = requireNotNull(activity.contentResolver.openOutputStream(uri)) { strings.cannotOpenTarget }
                     stream.use { it.write(bytes) }
                 }
             }
             saving = false
             outcome
-                .onSuccess { status = "已保存 $baseName.json" }
-                .onFailure { status = "保存失败：${it.message ?: "无法写入文件"}" }
+                .onSuccess { setStatus(strings.exportDone(baseName), STATUS_SUCCESS) }
+                .onFailure { setStatus(strings.exportFailed(it.message ?: strings.cannotOpenTarget), STATUS_ERROR) }
         }
     }
 
@@ -1215,13 +1288,13 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                     ) {
                         Column {
                             Text(
-                                "控件转换",
+                                strings.appTitle,
                                 style = MiuixTheme.textStyles.title1,
                                 fontWeight = FontWeight.Bold,
                                 color = layoutColors().text
                             )
                             Text(
-                                "FCL · ZL1/Pojav · ZL2",
+                                strings.appSubtitle,
                                 style = MiuixTheme.textStyles.body2,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MiuixTheme.colorScheme.primary
@@ -1231,21 +1304,21 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
 
                     // ===== Status =====
                     Text(
-                        if (busy) "处理中 · $status" else status,
+                        if (busy) "${strings.statusProcessingPrefix}$status" else status,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MiuixTheme.textStyles.body2,
                         color = when {
                             busy -> MiuixTheme.colorScheme.primary
-                            status.startsWith("转换失败") || status.startsWith("读取失败") || status.startsWith("保存失败") -> Error
-                            status.startsWith("转换完成") || status.startsWith("结果已复制") || status.startsWith("已保存") -> Success
+                            statusKind == STATUS_ERROR -> Error
+                            statusKind == STATUS_SUCCESS -> Success
                             else -> layoutColors().textSecondary
                         }
                     )
 
                     // ===== 格式选择 =====
-                    SmallTitle(text = "格式选择", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
+                    SmallTitle(text = strings.formatSelection, textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                     Card(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                         cornerRadius = 16.dp,
@@ -1253,9 +1326,9 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                             // 输入格式
-                            Text("输入格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
-                            val inputItems = listOf("自动", "FCL", "ZL1/Pojav", "ZL2")
-                            val inputValues = listOf("自动", "FCL", "ZL1", "ZL2")
+                            Text(strings.inputFormatLabel, style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                            val inputItems = listOf(strings.formatAuto, "FCL", "ZL1/Pojav", "ZL2")
+                            val inputValues = listOf(FORMAT_AUTO, "FCL", "ZL1", "ZL2")
                             TabRowWithContour(
                                 tabs = inputItems,
                                 selectedTabIndex = inputValues.indexOf(input).coerceAtLeast(0),
@@ -1266,7 +1339,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                             Spacer(Modifier.height(8.dp))
 
                             // 输出格式
-                            Text("输出格式", style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                            Text(strings.outputFormatLabel, style = MiuixTheme.textStyles.body2, color = layoutColors().textSecondary, modifier = Modifier.padding(bottom = 4.dp))
                             val outputItems = listOf("FCL", "ZL1/Pojav", "ZL2")
                             val outputValues = listOf("FCL", "ZL1", "ZL2")
                             TabRowWithContour(
@@ -1290,14 +1363,14 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                 }
                             ) {
                                 Text(
-                                    "在线转换（仅支持ZL2、FCL互转）",
+                                    strings.onlineToggleTitle,
                                     style = MiuixTheme.textStyles.body2,
                                     color = layoutColors().text,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    "FCL ↔ ZL2 时调用 cc.miawa.cn 转换",
+                                    strings.onlineToggleSummary,
                                     style = MiuixTheme.textStyles.body2,
                                     color = layoutColors().textSecondary
                                 )
@@ -1307,12 +1380,12 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
 
                             // 自动识别说明（仅输入格式为「自动」时显示，带展开/收起过渡动画）
                             AnimatedVisibility(
-                                visible = input == "自动",
+                                visible = input == FORMAT_AUTO,
                                 enter = fadeIn(tween(200)) + expandVertically(tween(240, easing = FastOutSlowInEasing)),
                                 exit = fadeOut(tween(150)) + shrinkVertically(tween(200, easing = FastOutSlowInEasing))
                             ) {
                                 Text(
-                                    "输入格式设为「自动」时，将根据内容自动识别 FCL / ZL1 / Pojav / ZL2",
+                                    strings.autoHint,
                                     style = MiuixTheme.textStyles.footnote2,
                                     color = layoutColors().textSecondary,
                                     modifier = Modifier
@@ -1324,7 +1397,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                     }
 
                     // ===== 布局 Section =====
-                    SmallTitle(text = "布局", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
+                    SmallTitle(text = strings.layoutSection, textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                     Card(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                         cornerRadius = 16.dp,
@@ -1332,11 +1405,12 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                             // Tab: 粘贴 / 选择文件（切换复用窗口）
-                            val inputTabs = listOf("粘贴", "选择文件")
+                            val inputTabs = listOf(strings.tabPaste, strings.tabChooseFile)
+                            val inputTabValues = listOf(TAB_PASTE, TAB_FILE)
                             TabRowWithContour(
                                 tabs = inputTabs,
-                                selectedTabIndex = if (inputTab == "粘贴") 0 else 1,
-                                onTabSelected = { inputTab = inputTabs[it] },
+                                selectedTabIndex = if (inputTab == TAB_PASTE) 0 else 1,
+                                onTabSelected = { inputTab = inputTabValues[it] },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
@@ -1347,7 +1421,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                 value = name,
                                 onValueChange = { name = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = "控制布局",
+                                label = strings.layoutNameLabel,
                                 useLabelAsPlaceholder = true,
                                 colors = TextFieldDefaults.textFieldColors(
                                     backgroundColor = layoutColors().input,
@@ -1362,13 +1436,13 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                             AnimatedContent(
                                 targetState = inputTab,
                                 transitionSpec = {
-                                    val dir = if (targetState == "粘贴") -1 else 1
+                                    val dir = if (targetState == TAB_PASTE) -1 else 1
                                     (slideInHorizontally(animationSpec = tween(280, easing = FastOutSlowInEasing), initialOffsetX = { it * dir }) + fadeIn(tween(200)))
                                         .togetherWith(slideOutHorizontally(animationSpec = tween(280, easing = FastOutSlowInEasing), targetOffsetX = { it * -dir }) + fadeOut(tween(150)))
                                 },
                                 label = "layoutContent"
                             ) { tab ->
-                                if (tab == "粘贴") {
+                                if (tab == TAB_PASTE) {
                                     JsonPasteField(
                                         state = sourceState,
                                         inputColor = layoutColors().input,
@@ -1384,7 +1458,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                             color = layoutColors().slot,
                                             contentColor = layoutColors().text
                                         )
-                                    ) { Text("选择布局文件", style = MiuixTheme.textStyles.body1) }
+                                    ) { Text(strings.chooseFileButton, style = MiuixTheme.textStyles.body1) }
                                 }
                             }
                         }
@@ -1395,10 +1469,10 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                         enabled = hasSource && !busy,
                         onClick = {
                             busy = true
-                            status = "正在转换…"
+                            setStatus(strings.converting)
                             // 只在点击时读取输入文本，组合期不读 → 打字不会因订阅输入而整页重组
                             val inputText = sourceState.text.toString()
-                            val actual = if (input == "自动") detectFormat(inputText) else input
+                            val actual = if (input == FORMAT_AUTO) detectFormat(inputText) else input
                             actualInput = actual
                             result = ""
                             showResult = false
@@ -1407,15 +1481,15 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                 busy = false
                                 if (r == "__ERROR__:__INVALID_JSON__") {
                                     result = ""
-                                    status = "转换失败：转换器返回了无效 JSON"
+                                    setStatus(strings.convertInvalidJson, STATUS_ERROR)
                                 } else if (r.startsWith("__ERROR__:")) {
                                     result = ""
                                     val errRaw = r.removePrefix("__ERROR__:")
-                                    status = "转换失败：${friendlyError(errRaw, actual, output)}"
+                                    setStatus(strings.convertFailed(friendlyError(errRaw, actual, output, strings)), STATUS_ERROR)
                                 } else {
                                     result = r
                                     showResult = true
-                                    status = "转换完成：${exportBaseName(name, actualInput, output)}.json"
+                                    setStatus(strings.convertDone("${exportBaseName(name, actualInput, output)}.json"), STATUS_SUCCESS)
                                 }
                             }
                         },
@@ -1427,7 +1501,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                             contentColor = Color.White,
                             disabledContentColor = Color.White.copy(alpha = 0.7f)
                         )
-                    ) { Text(if (busy) "转换中…" else "开始转换", style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold) }
+                    ) { Text(if (busy) strings.convertingButton else strings.convertButton, style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold) }
 
             }
             val outputPane: @Composable ColumnScope.() -> Unit = {
@@ -1439,7 +1513,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                         exit = fadeOut(tween(150))
                     ) {
                         Column {
-                            SmallTitle(text = "输出结果", textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
+                            SmallTitle(text = strings.outputResultSection, textColor = layoutColors().textSecondary, modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp))
                             Card(
                                 Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(16.dp)),
                                 cornerRadius = 16.dp,
@@ -1448,13 +1522,13 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                     // 结果信息标题
                                     Text(
-                                        "转换结果",
+                                        strings.resultTitleLabel,
                                         style = MiuixTheme.textStyles.body1,
                                         fontWeight = FontWeight.SemiBold,
                                         color = layoutColors().text
                                     )
                                     Text(
-                                        "${result.length} 字符",
+                                        strings.charsCount(result.length),
                                         style = MiuixTheme.textStyles.body2,
                                         color = layoutColors().textSecondary
                                     )
@@ -1468,23 +1542,23 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                             modifier = Modifier.weight(1f).height(44.dp),
                                             enabled = result.isNotBlank(),
                                             cornerRadius = 12.dp
-                                        ) { Text("导出", style = MiuixTheme.textStyles.body2) }
+                                        ) { Text(strings.exportButton, style = MiuixTheme.textStyles.body2) }
                                         Button(
                                             onClick = {
                                                 (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                                                    .setPrimaryClip(ClipData.newPlainText("布局 JSON", result))
-                                                Toast.makeText(activity, "已复制输出结果", Toast.LENGTH_SHORT).show()
-                                                status = "结果已复制"
+                                                    .setPrimaryClip(ClipData.newPlainText(strings.clipLabelResult, result))
+                                                Toast.makeText(activity, strings.resultCopiedToast, Toast.LENGTH_SHORT).show()
+                                                setStatus(strings.resultCopiedStatus, STATUS_SUCCESS)
                                             },
                                             modifier = Modifier.weight(1f).height(44.dp),
                                             enabled = result.isNotBlank(),
                                             cornerRadius = 12.dp
-                                        ) { Text("复制", style = MiuixTheme.textStyles.body2) }
+                                        ) { Text(strings.copyButton, style = MiuixTheme.textStyles.body2) }
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     // 展开 / 收起（官方文字按钮）
                                     TextButton(
-                                        text = if (resultExpanded) "收起结果" else "展开结果",
+                                        text = if (resultExpanded) strings.collapseResult else strings.expandResult,
                                         onClick = { resultExpanded = !resultExpanded },
                                         enabled = result.isNotBlank(),
                                         modifier = Modifier.fillMaxWidth()
@@ -1510,7 +1584,7 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
                                                 if (lines == null) {
                                                     Box(Modifier.fillMaxWidth().height(250.dp).padding(12.dp)) {
                                                         Text(
-                                                            "正在生成预览…",
+                                                            strings.generatingPreview,
                                                             color = layoutColors().textSecondary,
                                                             fontSize = 12.sp
                                                         )
@@ -1571,50 +1645,50 @@ private fun HomeTab(bottomInset: Dp = 0.dp) {
     // Log Dialog
     WindowDialog(
         show = showLog,
-        title = "日志",
+        title = strings.logTitle,
         onDismissRequest = { showLog = false }
     ) {
         Box(Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
             Text(buildString {
                 if (conversionFailLog.isNotBlank()) {
-                    appendLine("=== 转换失败日志 ===")
-                    append("最近失败原因：")
+                    appendLine(strings.logFailHeader)
+                    append(strings.logLastFailureReason)
                     append(
                         // 从原始失败日志里取 message= 行，映射为友好文案
                         runCatching {
                             Regex("message=(.+)").find(conversionFailLog)?.groupValues?.get(1)
-                        }.getOrNull()?.let { friendlyError(it, "-", "-") } ?: conversionFailLog
+                        }.getOrNull()?.let { friendlyError(it, "-", "-", strings) } ?: conversionFailLog
                     )
                     appendLine()
                     append(conversionFailLog)
                 } else {
-                    appendLine("=== 转换失败日志 ===")
-                    append("暂无")
+                    appendLine(strings.logFailHeader)
+                    append(strings.logNone)
                 }
-                appendLine("\n=== 运行日志 ===")
-                append(runtimeLog.ifBlank { "暂无" })
-                appendLine("\n=== 崩溃日志 ===")
-                append(crashLog.ifBlank { "暂无" })
+                appendLine("\n${strings.logRuntimeHeader}")
+                append(runtimeLog.ifBlank { strings.logNone })
+                appendLine("\n${strings.logCrashHeader}")
+                append(crashLog.ifBlank { strings.logNone })
             }, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = layoutColors().text)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 12.dp)) {
             val allLogs = buildString {
-                appendLine("=== 转换失败日志 ===")
+                appendLine(strings.logFailHeader)
                 append(conversionFailLog)
-                appendLine("\n=== 运行日志 ===")
+                appendLine("\n${strings.logRuntimeHeader}")
                 append(runtimeLog)
-                appendLine("\n=== 崩溃日志 ===")
+                appendLine("\n${strings.logCrashHeader}")
                 append(crashLog)
             }
             if (runtimeLog.isNotBlank() || crashLog.isNotBlank() || conversionFailLog.isNotBlank()) {
-                TextButton(text = "复制", onClick = {
+                TextButton(text = strings.copyButton, onClick = {
                     (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                        .setPrimaryClip(ClipData.newPlainText("日志", allLogs))
-                    status = "日志已复制"
+                        .setPrimaryClip(ClipData.newPlainText(strings.clipLabelLog, allLogs))
+                    setStatus(strings.logCopied, STATUS_SUCCESS)
                 })
-                TextButton(text = "清除", onClick = { CrashLogStore.clear(activity); crashLog = ""; runtimeLog = ""; conversionFailLog = ""; showLog = false })
+                TextButton(text = strings.logClear, onClick = { CrashLogStore.clear(activity); crashLog = ""; runtimeLog = ""; conversionFailLog = ""; showLog = false })
             }
-            TextButton(text = "关闭", onClick = { showLog = false })
+            TextButton(text = strings.logClose, onClick = { showLog = false })
         }
     }
 }
@@ -1760,30 +1834,31 @@ private fun detectFormat(text: String): String = runCatching {
     when { s.contains("\"viewGroups\"") -> "FCL"; s.contains("\"mControlDataList\"") -> "ZL1"; s.contains("\"layers\"") -> "ZL2"; else -> "未知" }
 }.getOrDefault("未知")
 
-/** 把转换器抛出的原始错误映射成简短、可操作的中文提示。 */
-private fun friendlyError(raw: String, input: String, output: String): String {
+/** 把转换器抛出的原始错误映射成简短、可操作的提示（按当前界面语言）。 */
+private fun friendlyError(raw: String, input: String, output: String, strings: Strings): String {
     val msg = raw.trim()
+    val err = strings.err
     return when {
-        msg.contains("不是有效的 FCL") -> "内容不是有效的 FCL 布局，请检查粘贴内容"
-        msg.contains("不是有效的 ZL1") -> "内容不是有效的 ZL1 布局，请检查粘贴内容"
-        msg.contains("不是有效的 ZL2") -> "内容不是有效的 ZL2 布局，请检查粘贴内容"
+        msg.contains("不是有效的 FCL") -> err.invalidFcl
+        msg.contains("不是有效的 ZL1") -> err.invalidZl1
+        msg.contains("不是有效的 ZL2") -> err.invalidZl2
         msg.contains("缺少 viewGroups") || msg.contains("缺少 layers") || msg.contains("缺少 mControlDataList") ->
-            "缺少关键字段，请输入对应格式的布局内容"
-        msg.contains("结构校验失败") -> "格式结构校验失败，内容可能已损坏或版本不符"
-        msg.contains("样式校验失败") -> "引用了不存在的样式，无法转换"
-        msg.contains("摇杆校验失败") -> "摇杆控件字段不完整，无法转换"
-        msg.contains("重复图层") -> "存在重复图层，无法转换"
-        msg.contains("悬空图层引用") -> "存在无效的图层引用，无法转换"
+            err.missingField
+        msg.contains("结构校验失败") -> err.structureCheckFailed
+        msg.contains("样式校验失败") -> err.styleCheckFailed
+        msg.contains("摇杆校验失败") -> err.joystickCheckFailed
+        msg.contains("重复图层") -> err.duplicateLayers
+        msg.contains("悬空图层引用") -> err.danglingLayerRef
         msg.contains("控件校验失败") || msg.contains("按钮校验失败") || msg.contains("方向控件校验失败") ->
-            "存在字段不完整的控件，无法转换"
-        msg.contains("控件完整性校验失败") -> "转换后控件数量下降，已保守停止以减少丢失"
-        msg.contains("不支持的格式") -> "暂不支持 ${input} → $output 的转换"
-        msg.contains("WebView 转换引擎不可用") -> "转换引擎未就绪，请重启应用"
-        msg.contains("超时") -> "转换超时，请重试或换更小的布局"
-        msg.contains("没有返回结果") -> "转换未能取得结果，请重试"
+            err.widgetCheckFailed
+        msg.contains("控件完整性校验失败") -> err.widgetCountDropped
+        msg.contains("不支持的格式") -> err.unsupportedDirection(input, output)
+        msg.contains("WebView 转换引擎不可用") -> err.engineNotReady
+        msg.contains("超时") -> err.timeout
+        msg.contains("没有返回结果") -> err.noResult
         msg.contains("在线响应异常") || msg.contains("在线转换失败") || msg.contains("在线转换返回空结果") ||
-        msg.contains("官网在线转换暂不支持") -> "在线转换失败，已回退本地引擎"
-        msg.contains("转换器返回空结果") || msg.contains("转换器返回空文本") -> "转换器未产生有效结果，请检查内容"
-        else -> msg.ifBlank { "转换失败" }
+        msg.contains("官网在线转换暂不支持") -> err.onlineFailedFallback
+        msg.contains("转换器返回空结果") || msg.contains("转换器返回空文本") -> err.emptyResult
+        else -> msg.ifBlank { err.genericFailed }
     }
 }
