@@ -1,16 +1,18 @@
 # Third-Party Licenses
 
-本项目（ControlLayoutConverter）基于 [MIT License](LICENSE) 授权，同时使用了以下第三方开源库/组件。感谢这些项目的作者。
+**English** | [简体中文](THIRD_PARTY_LICENSES.zh-CN.md)
 
-> 本文件列出本项目直接依赖的第三方组件的许可证信息，仅供合规参考。各许可证的完整文本以各项目仓库中的 LICENSE 为准。
+This project (ControlLayoutConverter) is licensed under the [MIT License](LICENSE) and uses the third-party open-source libraries and components listed below. Thanks to the authors of those projects.
+
+> This file lists license information for the third-party components this project depends on directly, for compliance reference only. The authoritative text of each license is the LICENSE file in that project's own repository.
 
 ---
 
-## Android / Compose 运行时库
+## Android / Compose runtime libraries
 
-以下库均来自 JetBrains / AndroidX / Google 官方，采用 **Apache License 2.0**：
+All of the following come from JetBrains / AndroidX / Google and are under the **Apache License 2.0**:
 
-| 组件 | 许可证 |
+| Component | License |
 |---|---|
 | androidx.compose:compose-bom | Apache 2.0 |
 | androidx.compose.ui:ui | Apache 2.0 |
@@ -23,34 +25,34 @@
 
 ---
 
-## 第三方 UI 组件库
+## Third-party UI component libraries
 
-| 组件 | 版本 | 许可证 | 说明 |
+| Component | Version | License | Notes |
 |---|---|---|---|
-| [Miuix](https://github.com/YuKongA/miuix) (`top.yukonga.miuix.kmp:miuix-ui-android`, `miuix-preference-android`) | 0.9.3 | **Apache 2.0** | Compose MultiPlatform UI 库（本项目的 Miuix 风格界面） |
-| [Backdrop](https://github.com/Kyant0/backdrop) (`io.github.kyant0:backdrop`) | 2.0.1 | **Apache 2.0** | Compose 毛玻璃/Liquid Glass 效果 |
+| [Miuix](https://github.com/YuKongA/miuix) (`top.yukonga.miuix.kmp:miuix-ui-android`, `miuix-preference-android`) | 0.9.3 | **Apache 2.0** | Compose Multiplatform UI library (the Miuix-style interface this project uses) |
+| [Backdrop](https://github.com/Kyant0/backdrop) (`io.github.kyant0:backdrop`) | 2.0.1 | **Apache 2.0** | Compose frosted-glass / Liquid Glass effect |
 
 ---
 
-## 原生转换库
+## Native conversion library
 
-| 组件 | 来源 | 许可证 | 说明 |
+| Component | Source | License | Notes |
 |---|---|---|---|
-| **libcc.so** | [NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter) | **MIT** | FastCraft/FCL ↔ ZalithLauncher2 布局转换的原生引擎（Rust JNI），作者 NingZeStudio |
+| **libcc.so** | [NingZeStudio/control-converter](https://github.com/NingZeStudio/control-converter) | **MIT** | Native engine (Rust JNI) for FastCraft/FCL ↔ ZalithLauncher2 layout conversion, by NingZeStudio |
 
-> 该原生库用于 `com.tungsten.fcl.util.LayoutConverter`（JNI 封装）与 `OfficialConverter` 的 FCL↔ZL2 转换。按 MIT 许可要求保留其版权与许可声明（见 README 致谢）。
+> This native library backs FCL↔ZL2 conversion in `com.tungsten.fcl.util.LayoutConverter` (the JNI wrapper) and `OfficialConverter`. Its copyright and license notice are retained as required by the MIT license (see the README credits).
 
 ---
 
-## 在线转换服务
+## Online conversion service
 
-| 服务 | 说明 |
+| Service | Notes |
 |---|---|
-| [api.cc.miawa.cn](https://api.cc.miawa.cn) | 在线转换接口（可选使用） |
+| [api.cc.miawa.cn](https://api.cc.miawa.cn) | Online conversion API (optional) |
 
 ---
 
-## 说明
+## Notes
 
-- 本项目**未引入 GPL/AGPL 等强传染性许可**的依赖，因此以 MIT 授权本项目（含衍生代码）是兼容的。
-- 若你对某一组件的许可证有疑问，请以该组件对应仓库的 LICENSE 文件为准。
+- This project **does not include any GPL/AGPL or other strongly copyleft dependencies**, so licensing this project (including derivative code) under MIT is compatible.
+- If you have questions about a particular component's license, refer to the LICENSE file in that component's own repository.

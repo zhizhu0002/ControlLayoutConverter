@@ -3,25 +3,41 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循语义化版本（SemVer）。
 
-## [未发布]
+> 从本条起，新增记录采用中英双语；此前的历史记录保持中文原样。
 
-### 界面
+## [未发布] / Unreleased
+
+### 界面 / Interface
 
 - **新增英文界面**：关于页在「主题」与「关于」之间新增「语言」板块，可在中文 / English 之间切换，选择会记住
+  **Added an English interface** — a "Language" section in the About page (between "Theme" and "About") lets you switch between 中文 and English; the choice is remembered.
 - 界面文案与「界面语言」解耦：切换语言不影响任何已保存的数据（主题偏好、转换结果、导出文件名格式）
+  UI copy is decoupled from the interface language: switching it never affects saved data (theme preference, conversion results, exported filename format).
 - 首次启动未做选择时跟随系统语言（系统为中文则中文，否则英文）
+  On first launch, before any choice is made, the interface follows the system language (Chinese for a Chinese system, English otherwise).
 - 桌面图标名也分语言：英文系统显示 `FCL/ZL Control Converter`（debug 为 `… Debug`）
+  The launcher icon name is localized too: English systems show `FCL/ZL Control Converter` (`… Debug` for debug builds).
 
-### 修复
+### 文档 / Documentation
+
+- README、CONTRIBUTING、THIRD_PARTY_LICENSES 改为英文为默认、中文另存为 `*.zh-CN.md`，两份互相链接；中文内容原样保留
+  README, CONTRIBUTING and THIRD_PARTY_LICENSES now default to English, with the Chinese versions kept as `*.zh-CN.md` and cross-linked from both sides; the Chinese content is preserved unchanged.
+
+### 修复 / Fixes
 
 - **「第三方开源项目」页标题下方多出一条状态栏高度的空白**：该页顶栏用的 Miuix `SmallTopAppBar` 内部会自行施加 `WindowInsets.systemBars.only(Top)`，而 Scaffold 已把同一内边距施加在外层容器上，等于加了两次。现声明外层内边距已消费，顶栏不再重复让位。此问题自该页引入即存在，与界面语言无关
+  **Extra status-bar-height gap below the title on the "Third-Party Projects" page** — the page's Miuix `SmallTopAppBar` applies `WindowInsets.systemBars.only(Top)` itself, while the Scaffold had already applied the same inset to the outer container, so it was applied twice. The outer inset is now declared consumed, so the app bar no longer reserves space again. The issue predates the language work and was language-independent.
 
-### 内部
+### 内部 / Internal
 
 - 状态栏文字颜色改由显式的状态类型驱动，不再靠匹配中文前缀（原写法在英文界面下会失效）
+  Status-text color is now driven by an explicit status kind instead of matching Chinese text prefixes (the old approach broke under the English interface).
 
 > 感谢 [@vvikramsingh937-web](https://github.com/vvikramsingh937-web) 在
 > [#1](https://github.com/zhizhu0002/ControlLayoutConverter/issues/1) 提供的英文版与中英双语实现。
+>
+> Thanks to [@vvikramsingh937-web](https://github.com/vvikramsingh937-web) for the English
+> implementation contributed in [#1](https://github.com/zhizhu0002/ControlLayoutConverter/issues/1).
 
 ## [0.6] - 2026-09-19
 

@@ -1,95 +1,97 @@
-# 贡献指南 Contributing
+# Contributing
 
-感谢你对 **ControlLayoutConverter** 的关注与贡献！本指南说明如何参与到项目开发中。
+**English** | [简体中文](CONTRIBUTING.zh-CN.md)
 
-## 贡献方式
+Thanks for your interest in **ControlLayoutConverter**! This guide explains how to get involved.
 
-本仓库采用分级协作模式：
+## Ways to contribute
 
-| 角色 | 权限 | 如何贡献 |
+This repository uses a two-tier collaboration model:
+
+| Role | Access | How to contribute |
 |---|---|---|
-| **核心协作者**（Collaborator） | 直接 push | 由仓库所有者邀请加入，可直接推送到 `main` |
-| **外部贡献者** | 只读 | 通过 **Fork + Pull Request** 提交改动 |
+| **Core collaborator** | Direct push | Invited by the repository owner; may push straight to `main` |
+| **External contributor** | Read-only | Submit changes via **Fork + Pull Request** |
 
 ---
 
-## 一、核心协作者（Collaborator）
+## 1. Core collaborators
 
-- 由仓库所有者（`zhizhu0002`）添加为 **Collaborator** 后即可直接 `git push`。
-- 建议在 `main` 分支上保持**小步提交**，提交信息清晰说明改动内容。
-- 涉及重大改动前，尽量先在 feature 分支上进行并同步给其他协作者。
+- Once the repository owner (`zhizhu0002`) adds you as a **collaborator**, you can `git push` directly.
+- Keep commits **small** on `main`, with messages that clearly describe the change.
+- For significant changes, prefer working on a feature branch first and syncing with the other collaborators.
 
 ---
 
-## 二、外部贡献者（Fork + Pull Request）
+## 2. External contributors (Fork + Pull Request)
 
-### 1. Fork 仓库
-点击仓库右上角的 **Fork** 按钮，把项目复制到你的账号下。
+### 1. Fork the repository
+Click **Fork** in the top-right corner to copy the project into your own account.
 
-### 2. 克隆并创建分支
+### 2. Clone and create a branch
 ```bash
-git clone https://github.com/<你的用户名>/ControlLayoutConverter.git
+git clone https://github.com/<your-username>/ControlLayoutConverter.git
 cd ControlLayoutConverter
 git checkout -b feature/my-change
 ```
 
-### 3. 进行改动
-修改代码，并保持提交信息简洁、描述清晰：
+### 3. Make your changes
+Edit the code, and keep commit messages short and clear:
 ```bash
 git add .
 git commit -m "describe your change here"
 ```
 
-### 4. 推送并提交 Pull Request
+### 4. Push and open a Pull Request
 ```bash
 git push origin feature/my-change
 ```
-然后在 GitHub 上点击 **Contribute → Open pull request**，提交到上游的 `main` 分支。
+Then on GitHub click **Contribute → Open pull request**, targeting the upstream `main` branch.
 
-### 5. 等待审核与合并
-维护者会 review 你的 PR。若 CI 检查或不一致需要调整，请根据反馈修改并在同一分支继续 push。
+### 5. Review and merge
+A maintainer will review your PR. If CI checks or review feedback call for adjustments, push further commits to the same branch.
 
 ---
 
-## 三、环境与构建
+## 3. Environment and build
 
-### 环境要求
+### Requirements
 - **JDK 17**
-- **Android SDK**（compileSdk 37, targetSdk 36, minSdk 26）
-- **Gradle 9.3.1**（由 `gradlew` wrapper 提供）
+- **Android SDK** (compileSdk 37, targetSdk 36, minSdk 26)
+- **Gradle 9.3.1** (provided by the `gradlew` wrapper)
 - **AGP 9.1.1 / Kotlin 2.4.0**
-- 仅支持 **arm64-v8a** ABI
+- **arm64-v8a** ABI only
 
-> `local.properties`（本机 SDK 路径）与 `release.keystore`（签名证书）已被 `.gitignore` 忽略，克隆后请自行配置本机环境。
+> `local.properties` (your local SDK path) and `release.keystore` (signing certificate) are ignored by `.gitignore` — configure them yourself after cloning.
 
-### 构建
+### Build
 ```bash
 ./gradlew assembleDebug      # Debug APK
-./gradlew assembleRelease    # Release APK（需本地签名证书）
+./gradlew assembleRelease    # Release APK (requires a local signing certificate)
 ```
 
-APK 输出在 `app/build/outputs/apk/`。
+APKs are written to `app/build/outputs/apk/`.
 
 ---
 
-## 四、代码规范
+## 4. Code conventions
 
-- **语言**：Kotlin（Compose + Miuix UI）、Java（JNI 封装）、JS（WebView 转换引擎）
-- 保持现有代码风格与命名约定。
-- 涉及转换逻辑的改动，请确保控件数量守恒（避免破坏 1:1 转换）。
-- 提交前请尽量本地跑一次 `assembleDebug` 确认编译通过。
+- **Languages**: Kotlin (Compose + Miuix UI), Java (JNI wrappers), JS (WebView conversion engine)
+- Follow the existing code style and naming conventions.
+- For changes to conversion logic, make sure the control count is conserved (don't break 1:1 conversion).
+- Before submitting, please run `assembleDebug` locally to confirm it compiles.
 
 ---
 
-## 五、提交信息规范
+## 5. Commit message conventions
 
-建议使用简洁、面向改动的描述，例如：
+Short, change-oriented descriptions are preferred, for example:
 - `Fix: correct ZL2 to FCL color conversion`
 - `Feat: add ZL1 joystick direction support`
 - `Docs: update README build instructions`
 
 ---
 
-## 六、许可
+## 6. License
 
-本项目基于 [MIT License](LICENSE) 开源。提交贡献即表示你同意将该贡献以 MIT 许可授权给本项目。
+This project is released under the [MIT License](LICENSE). By submitting a contribution, you agree to license that contribution to this project under the MIT license.
