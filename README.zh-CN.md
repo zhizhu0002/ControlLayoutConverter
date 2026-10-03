@@ -20,6 +20,7 @@
 - 输入格式**自动识别**
 - 在线转换（可选，FoldCraftLauncher↔ZalithLauncher2），失败自动回退本地引擎
 - Compose + Miuix UI，适配暗色模式
+- 中文 / 英文界面
 
 ---
 

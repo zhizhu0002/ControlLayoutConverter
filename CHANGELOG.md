@@ -20,8 +20,8 @@
 
 ### 文档 / Documentation
 
-- README、CONTRIBUTING、THIRD_PARTY_LICENSES 改为英文为默认、中文另存为 `*.zh-CN.md`，两份互相链接；中文内容原样保留
-  README, CONTRIBUTING and THIRD_PARTY_LICENSES now default to English, with the Chinese versions kept as `*.zh-CN.md` and cross-linked from both sides; the Chinese content is preserved unchanged.
+- README、CONTRIBUTING、THIRD_PARTY_LICENSES 改为英文为默认、中文另存为 `*.zh-CN.md`，两份互相链接；中文正文除新增语言切换链接与一条功能说明外保持原样
+  README, CONTRIBUTING and THIRD_PARTY_LICENSES now default to English, with the Chinese versions kept as `*.zh-CN.md` and cross-linked from both sides; aside from the language-switch links and one added feature entry, the Chinese text is unchanged.
 
 ### 修复 / Fixes
 

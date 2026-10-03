@@ -2,7 +2,7 @@
 
 **English** | [简体中文](CONTRIBUTING.zh-CN.md)
 
-Thanks for your interest in **ControlLayoutConverter**! This guide explains how to get involved.
+Thanks for your interest in contributing to **ControlLayoutConverter**! This guide explains how to get involved.
 
 ## Ways to contribute
 
@@ -10,8 +10,8 @@ This repository uses a two-tier collaboration model:
 
 | Role | Access | How to contribute |
 |---|---|---|
-| **Core collaborator** | Direct push | Invited by the repository owner; may push straight to `main` |
-| **External contributor** | Read-only | Submit changes via **Fork + Pull Request** |
+| **Core collaborator** | Direct push | Added by the repository owner; may push directly to `main` |
+| **External contributor** | Read-only | Submit changes via fork + pull request |
 
 ---
 
@@ -19,14 +19,14 @@ This repository uses a two-tier collaboration model:
 
 - Once the repository owner (`zhizhu0002`) adds you as a **collaborator**, you can `git push` directly.
 - Keep commits **small** on `main`, with messages that clearly describe the change.
-- For significant changes, prefer working on a feature branch first and syncing with the other collaborators.
+- For substantial changes, work on a feature branch first and keep the other collaborators in the loop.
 
 ---
 
-## 2. External contributors (Fork + Pull Request)
+## 2. External contributors (fork + pull request)
 
 ### 1. Fork the repository
-Click **Fork** in the top-right corner to copy the project into your own account.
+Click **Fork** in the top-right corner to copy the project to your own account.
 
 ### 2. Clone and create a branch
 ```bash
@@ -36,20 +36,20 @@ git checkout -b feature/my-change
 ```
 
 ### 3. Make your changes
-Edit the code, and keep commit messages short and clear:
+Edit the code, keeping commit messages concise and descriptive:
 ```bash
 git add .
 git commit -m "describe your change here"
 ```
 
-### 4. Push and open a Pull Request
+### 4. Push and open a pull request
 ```bash
 git push origin feature/my-change
 ```
-Then on GitHub click **Contribute → Open pull request**, targeting the upstream `main` branch.
+Then on GitHub, click **Contribute → Open pull request** and target the upstream `main` branch.
 
 ### 5. Review and merge
-A maintainer will review your PR. If CI checks or review feedback call for adjustments, push further commits to the same branch.
+A maintainer will review your pull request. If CI checks fail or changes are requested, address the feedback and push further commits to the same branch.
 
 ---
 
@@ -62,7 +62,7 @@ A maintainer will review your PR. If CI checks or review feedback call for adjus
 - **AGP 9.1.1 / Kotlin 2.4.0**
 - **arm64-v8a** ABI only
 
-> `local.properties` (your local SDK path) and `release.keystore` (signing certificate) are ignored by `.gitignore` — configure them yourself after cloning.
+> `local.properties` (your local SDK path) and `release.keystore` (the signing certificate) are ignored by `.gitignore`; configure your own after cloning.
 
 ### Build
 ```bash
@@ -77,15 +77,15 @@ APKs are written to `app/build/outputs/apk/`.
 ## 4. Code conventions
 
 - **Languages**: Kotlin (Compose + Miuix UI), Java (JNI wrappers), JS (WebView conversion engine)
-- Follow the existing code style and naming conventions.
-- For changes to conversion logic, make sure the control count is conserved (don't break 1:1 conversion).
-- Before submitting, please run `assembleDebug` locally to confirm it compiles.
+- Match the existing code style and naming conventions.
+- For changes to conversion logic, ensure the control count is conserved (do not break 1:1 conversion).
+- Before submitting, run `assembleDebug` locally to confirm the project compiles.
 
 ---
 
 ## 5. Commit message conventions
 
-Short, change-oriented descriptions are preferred, for example:
+Use concise, change-oriented descriptions, for example:
 - `Fix: correct ZL2 to FCL color conversion`
 - `Feat: add ZL1 joystick direction support`
 - `Docs: update README build instructions`
