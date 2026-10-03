@@ -3,9 +3,9 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循语义化版本（SemVer）。
 
-> 从本条起，新增记录采用中英双语；此前的历史记录保持中文原样。
+> 自 0.7 起，新增记录采用中英双语；此前的历史记录保持中文原样。
 
-## [未发布] / Unreleased
+## [0.7] - 2026-10-03
 
 ### 界面 / Interface
 
@@ -148,6 +148,7 @@
 - 布局 JSON 文件选择、导出与重命名
 - 转换失败 / 运行 / 崩溃日志记录与导出
 
+[0.7]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.7
 [0.6]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.6
 [0.5]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.5
 [0.4]: https://github.com/zhizhu0002/ControlLayoutConverter/releases/tag/v0.4
