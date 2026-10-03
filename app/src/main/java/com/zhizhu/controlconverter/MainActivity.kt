@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.input.InputTransformation
@@ -650,6 +651,12 @@ private fun ConverterApp() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(paddingValues)
+                                // Scaffold 已经把系统栏内边距施加在本容器上，这里再声明「已消费」。
+                                // 否则 Miuix 的 SmallTopAppBar 内部会自行再加一次
+                                // WindowInsets.systemBars.only(Top)，导致「第三方开源项目」页标题
+                                // 下方凭空多出一条状态栏高度的空白（中英文界面都一样）。
+                                // 全文件只有这一处消费 insets，且无其它 windowInsets* 修饰符，故无副作用。
+                                .consumeWindowInsets(paddingValues)
                                 .then(if (isLandscape) Modifier.padding(start = railWidth) else Modifier)
                         ) {
                     AnimatedContent(
